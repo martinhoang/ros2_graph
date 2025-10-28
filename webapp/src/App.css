@@ -1,0 +1,32 @@
+.app {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.reactflow-wrapper {
+  flex-grow: 1;
+}
+
+.error-banner {
+  background-color: #ff6b6b;
+  color: white;
+  padding: 10px 20px;
+  text-align: center;
+  font-weight: bold;
+  z-index: 1000;
+}
+
+/* React Flow custom styles */
+.react-flow__node {
+  font-size: 12px;
+}
+
+.react-flow__edge-path {
+  stroke-width: 2;
+}
+
+.react-flow__edge.selected .react-flow__edge-path {
+  stroke-width: 3;
+}

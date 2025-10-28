@@ -1,0 +1,9 @@
+[project]
+name = "ros2-graph-backend"
+version = "1.0.0"
+description = "ROS2 Graph Viewer Backend Service"
+requires-python = ">=3.8"
+dependencies = [
+    "flask>=2.3.0",
+    "flask-cors>=4.0.0",
+]

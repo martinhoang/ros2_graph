@@ -1,0 +1,58 @@
+import React from 'react';
+import './Toolbar.css';
+
+const Toolbar = ({
+  onRefresh,
+  onToggleAutoRefresh,
+  onToggleDebugNodes,
+  autoRefresh,
+  hideDebugNodes,
+  loading,
+}) => {
+  return (
+    <div className="toolbar">
+      <div className="toolbar-section">
+        <h1 className="toolbar-title">ROS2 Graph Viewer</h1>
+      </div>
+      
+      <div className="toolbar-section toolbar-controls">
+        <button
+          className="toolbar-button"
+          onClick={onRefresh}
+          disabled={loading}
+          title="Refresh graph"
+        >
+          {loading ? '⏳' : '🔄'} Refresh
+        </button>
+        
+        <button
+          className={`toolbar-button ${autoRefresh ? 'active' : ''}`}
+          onClick={onToggleAutoRefresh}
+          title="Toggle auto-refresh (every 2s)"
+        >
+          {autoRefresh ? '⏸️' : '▶️'} Auto-Refresh
+        </button>
+        
+        <button
+          className={`toolbar-button ${hideDebugNodes ? 'active' : ''}`}
+          onClick={onToggleDebugNodes}
+          title={hideDebugNodes ? "Debug nodes hidden - click to show" : "Debug nodes visible - click to hide"}
+        >
+          {hideDebugNodes ? '👁️‍🗨️' : '👁️'} {hideDebugNodes ? 'Hidden' : 'Show All'}
+        </button>
+      </div>
+
+      <div className="toolbar-section toolbar-info">
+        <span className="status-indicator">
+          {loading ? (
+            <span className="status-loading">Loading...</span>
+          ) : (
+            <span className="status-ready">Ready</span>
+          )}
+        </span>
+      </div>
+    </div>
+  );
+};
+
+export default Toolbar;

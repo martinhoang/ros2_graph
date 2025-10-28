@@ -1,0 +1,16 @@
+.vscode
+**/__pycache__/
+log
+node_modules/
+dist/
+.vite/
+*.log
+npm-debug.log*
+.DS_Store
+*.pyc
+build/
+install/
+# uv
+.venv/
+uv.lock
+*.egg-info/
