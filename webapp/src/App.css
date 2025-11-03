@@ -3,6 +3,14 @@
   height: 100%;
   display: flex;
   flex-direction: column;
+  background-color: #ffffff;
+  color: #333333;
+  transition: background-color 0.3s, color 0.3s;
+}
+
+.app.dark-mode {
+  background-color: #1e1e1e;
+  color: #e0e0e0;
 }
 
 .reactflow-wrapper {
@@ -25,8 +33,66 @@
 
 .react-flow__edge-path {
   stroke-width: 2;
+  transition: stroke 0.2s, stroke-width 0.2s;
 }
 
 .react-flow__edge.selected .react-flow__edge-path {
   stroke-width: 3;
 }
+
+/* Hover highlighting */
+.react-flow__node.highlighted {
+  opacity: 1;
+  box-shadow: 0 0 10px rgba(100, 200, 255, 0.8);
+  transition: box-shadow 0.2s;
+}
+
+.react-flow__node.dimmed {
+  opacity: 0.3;
+  transition: opacity 0.2s;
+}
+
+.react-flow__edge.highlighted .react-flow__edge-path {
+  stroke: #64c8ff;
+  stroke-width: 3;
+  filter: drop-shadow(0 0 3px rgba(100, 200, 255, 0.6));
+}
+
+.react-flow__edge.highlighted {
+  z-index: 100;
+}
+
+.react-flow__edge.dimmed .react-flow__edge-path {
+  opacity: 0.2;
+  transition: opacity 0.2s;
+}
+
+/* Dark mode React Flow adjustments */
+.app.dark-mode .react-flow__controls {
+  background-color: #2a2a2a;
+  border-color: #444444;
+}
+
+.app.dark-mode .react-flow__controls button {
+  background-color: #3a3a3a;
+  color: #e0e0e0;
+  border: 1px solid #555555;
+}
+
+.app.dark-mode .react-flow__controls button:hover {
+  background-color: #4a4a4a;
+}
+
+.app.dark-mode .react-flow__minimap {
+  background-color: #2a2a2a;
+  border-color: #444444;
+}
+
+.app.dark-mode .react-flow__background {
+  background-color: #1e1e1e;
+}
+
+.app.dark-mode .react-flow__background path {
+  fill: #333333;
+}
+

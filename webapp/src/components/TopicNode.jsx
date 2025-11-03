@@ -11,7 +11,12 @@ const TopicNodeComponent = memo(({ data, isConnectable }) => {
   };
 
   return (
-    <div className="topic-node" style={{ borderColor: getTopicColor() }}>
+    <div 
+      className="topic-node" 
+      style={{ borderColor: getTopicColor() }}
+      onMouseEnter={data.onMouseEnter}
+      onMouseLeave={data.onMouseLeave}
+    >
       <Handle
         type="target"
         position={Position.Left}

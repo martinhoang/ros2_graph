@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# ros2_graph: direct CLI entry point for ROS2 Graph Viewer
+# This script delegates to the package's launch.sh while allowing invocation
+# via PATH after colcon build + workspace sourcing.
+
+set -e
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
+# When installed via CMake: this script resides in install/ros2_graph/bin/
+# launch.sh resides in install/ros2_graph/lib/ros2_graph/launch.sh
+POSSIBLE_LOCATIONS=(
+	"$SCRIPT_DIR/../lib/ros2_graph/launch.sh"          # standard installed layout
+	"$SCRIPT_DIR/launch.sh"                           # fallback if not installed
+	"$( cd "$SCRIPT_DIR/.." && pwd )/launch.sh"      # relative parent
+)
+
+for path in "${POSSIBLE_LOCATIONS[@]}"; do
+	if [ -f "$path" ]; then
+		LAUNCH_SCRIPT="$path"
+		break
+	fi
+done
+
+if [ -z "${LAUNCH_SCRIPT:-}" ] || [ ! -f "$LAUNCH_SCRIPT" ]; then
+	echo "ros2_graph: launch.sh not found (checked: ${POSSIBLE_LOCATIONS[*]})" >&2
+	exit 1
+fi
+
+exec "$LAUNCH_SCRIPT" "$@"

@@ -5,9 +5,13 @@ const Toolbar = ({
   onRefresh,
   onToggleAutoRefresh,
   onToggleDebugNodes,
+  onToggleDarkMode,
+  onResetLayout,
   autoRefresh,
   hideDebugNodes,
+  darkMode,
   loading,
+  wsConnected,
 }) => {
   return (
     <div className="toolbar">
@@ -28,7 +32,7 @@ const Toolbar = ({
         <button
           className={`toolbar-button ${autoRefresh ? 'active' : ''}`}
           onClick={onToggleAutoRefresh}
-          title="Toggle auto-refresh (every 2s)"
+          title="Toggle auto-refresh (every 2s, uses polling if WebSocket unavailable)"
         >
           {autoRefresh ? '⏸️' : '▶️'} Auto-Refresh
         </button>
@@ -40,9 +44,28 @@ const Toolbar = ({
         >
           {hideDebugNodes ? '👁️‍🗨️' : '👁️'} {hideDebugNodes ? 'Hidden' : 'Show All'}
         </button>
+
+        <button
+          className={`toolbar-button ${darkMode ? 'active' : ''}`}
+          onClick={onToggleDarkMode}
+          title="Toggle dark mode"
+        >
+          {darkMode ? '☀️' : '🌙'} Theme
+        </button>
+
+        <button
+          className="toolbar-button"
+          onClick={onResetLayout}
+          title="Reset node positions to automatic layout"
+        >
+          🔄 Reset Layout
+        </button>
       </div>
 
       <div className="toolbar-section toolbar-info">
+        <span className={`status-indicator ${wsConnected ? 'ws-connected' : 'ws-disconnected'}`}>
+          {wsConnected ? '🔗' : '📡'} {wsConnected ? 'Live' : 'Polling'}
+        </span>
         <span className="status-indicator">
           {loading ? (
             <span className="status-loading">Loading...</span>

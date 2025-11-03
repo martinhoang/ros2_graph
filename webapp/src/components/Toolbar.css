@@ -7,6 +7,11 @@
   color: white;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   z-index: 1000;
+  transition: background 0.3s;
+}
+
+.toolbar.dark-mode {
+  background: linear-gradient(135deg, #2a2a2a 0%, #1a1a1a 100%);
 }
 
 .toolbar-section {
@@ -59,12 +64,22 @@
 
 .toolbar-info {
   font-size: 14px;
+  display: flex;
+  gap: 15px;
 }
 
 .status-indicator {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.status-indicator.ws-connected {
+  color: #4ade80;
+}
+
+.status-indicator.ws-disconnected {
+  color: #fbbf24;
 }
 
 .status-loading,
@@ -94,5 +109,9 @@
   .toolbar-section {
     width: 100%;
     justify-content: center;
+  }
+
+  .toolbar-info {
+    flex-direction: column;
   }
 }

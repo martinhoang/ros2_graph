@@ -8,10 +8,14 @@ import rclpy
 from rclpy.node import Node
 from flask import Flask, jsonify
 from flask_cors import CORS
+from flask_sock import Sock
 import threading
 import signal
 import sys
 import atexit
+import argparse
+import json
+import time
 
 class ROS2GraphService(Node):
     def __init__(self):
@@ -80,8 +84,9 @@ class ROS2GraphService(Node):
                     full_node_name = f"{namespace}{node_name}".replace('//', '/')
                     
                     if full_node_name in node_id_map:
+                        edge_id = f"{node_id_map[full_node_name]}-{topic_id}-pub"
                         edges.append({
-                            'id': f"{node_id_map[full_node_name]}-{topic_id}",
+                            'id': edge_id,
                             'source': node_id_map[full_node_name],
                             'target': topic_id,
                             'data': {'type': 'publisher'}
@@ -94,8 +99,9 @@ class ROS2GraphService(Node):
                     full_node_name = f"{namespace}{node_name}".replace('//', '/')
                     
                     if full_node_name in node_id_map:
+                        edge_id = f"{topic_id}-{node_id_map[full_node_name]}-sub"
                         edges.append({
-                            'id': f"{topic_id}-{node_id_map[full_node_name]}",
+                            'id': edge_id,
                             'source': topic_id,
                             'target': node_id_map[full_node_name],
                             'data': {'type': 'subscriber'}
@@ -188,6 +194,72 @@ class ROS2GraphService(Node):
 # Flask app
 app = Flask(__name__)
 CORS(app)
+sock = Sock(app)
+
+# Global ROS2 node and WebSocket clients
+ros2_node = None
+ros2_thread = None
+ws_clients = []
+graph_update_thread = None
+last_graph_data = None
+
+
+def graph_update_loop():
+  """Background thread to push updates to all connected WebSocket clients"""
+  global last_graph_data
+  
+  while True:
+    try:
+      if ros2_node is None:
+        time.sleep(1)
+        continue
+      
+      current_graph = ros2_node.get_graph_data()
+      
+      # Only send if graph changed
+      if current_graph != last_graph_data and ws_clients:
+        last_graph_data = current_graph
+        message = json.dumps({'type': 'graph_update', 'data': current_graph})
+        
+        # Send to all connected clients
+        dead_clients = []
+        for client in ws_clients:
+          try:
+            client.send(message)
+          except Exception as e:
+            dead_clients.append(client)
+        
+        # Remove dead clients
+        for client in dead_clients:
+          if client in ws_clients:
+            ws_clients.remove(client)
+      
+      time.sleep(0.5)
+    except Exception:
+      time.sleep(1)
+
+
+@sock.route('/ws/graph')
+def ws_graph(ws):
+  """WebSocket endpoint for real-time graph updates"""
+  ws_clients.append(ws)
+  try:
+    # Send initial graph data
+    if ros2_node:
+      graph = ros2_node.get_graph_data()
+      ws.send(json.dumps({'type': 'graph_update', 'data': graph}))
+    
+    # Keep connection open
+    while True:
+      msg = ws.receive()
+      if msg == 'ping':
+        ws.send('pong')
+  except Exception:
+    pass
+  finally:
+    if ws in ws_clients:
+      ws_clients.remove(ws)
+
 
 # Global ROS2 node
 ros2_node = None
@@ -252,6 +324,11 @@ def health():
 
 def main():
     global ros2_node, ros2_thread
+    global graph_update_thread
+    
+    parser = argparse.ArgumentParser(description="ROS2 Graph Backend Server")
+    parser.add_argument("--port", type=int, default=5000, help="Port to bind the Flask server (default: 5000)")
+    args = parser.parse_args()
     
     def cleanup():
         """Cleanup function to properly shutdown ROS2 and Flask"""
@@ -283,16 +360,21 @@ def main():
     ros2_thread = threading.Thread(target=ros2_spin, daemon=True)
     ros2_thread.start()
     
-    print("Starting ROS2 Graph Backend Server on http://localhost:5000")
+    print(f"Starting ROS2 Graph Backend Server on http://localhost:{args.port}")
     print("API endpoints:")
     print("  GET /api/graph - Get complete graph data")
     print("  GET /api/node/<node_name> - Get node details")
     print("  GET /api/topic/<topic_name> - Get topic details")
     print("  GET /api/health - Health check")
+    print("  WebSocket /ws/graph - Real-time graph updates")
+    
+    # Start graph update thread
+    graph_update_thread = threading.Thread(target=graph_update_loop, daemon=True)
+    graph_update_thread.start()
     
     try:
         # Run Flask app
-        app.run(host='0.0.0.0', port=5000, debug=False, threaded=True, use_reloader=False)
+        app.run(host='0.0.0.0', port=args.port, debug=False, threaded=True, use_reloader=False)
     except KeyboardInterrupt:
         pass
     finally:

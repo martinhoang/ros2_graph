@@ -48,3 +48,13 @@
 .node-handle:hover {
   background: #2d3748;
 }
+
+/* Dark mode support */
+.dark-mode .ros2-node {
+  background: linear-gradient(135deg, #4a5568 0%, #2d3748 100%);
+  border-color: #2d3748;
+}
+
+.dark-mode .ros2-node:hover {
+  box-shadow: 0 8px 12px rgba(0, 0, 0, 0.4);
+}

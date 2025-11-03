@@ -1,5 +1,8 @@
 import dagre from 'dagre';
 
+// Track duplicate warnings to avoid spam
+const warnedDuplicates = new Set();
+
 export const layoutGraph = (nodes, edges, hideDebugNodes = true) => {
   // Filter debug nodes if needed
   let filteredNodes = nodes;
@@ -64,16 +67,31 @@ export const layoutGraph = (nodes, edges, hideDebugNodes = true) => {
     };
   });
 
-  // Add colors to edges based on connection type
-  const layoutedEdges = filteredEdges.map((edge) => ({
-    ...edge,
-    animated: true,
-    style: {
-      stroke: edge.data?.type === 'publisher' ? '#48bb78' : '#4299e1',
-      strokeWidth: 2,
-    },
-    type: 'smoothstep',
-  }));
+  // Add colors to edges based on connection type and deduplicate
+  const seenEdgeIds = new Set();
+  const layoutedEdges = filteredEdges
+    .filter((edge) => {
+      // Deduplicate edges by ID
+      if (seenEdgeIds.has(edge.id)) {
+        // Only warn once per duplicate edge ID to avoid console spam
+        if (!warnedDuplicates.has(edge.id)) {
+          console.warn(`Duplicate edge ID detected: ${edge.id}`);
+          warnedDuplicates.add(edge.id);
+        }
+        return false;
+      }
+      seenEdgeIds.add(edge.id);
+      return true;
+    })
+    .map((edge) => ({
+      ...edge,
+      animated: true,
+      style: {
+        stroke: edge.data?.type === 'publisher' ? '#48bb78' : '#4299e1',
+        strokeWidth: 2,
+      },
+      type: 'smoothstep',
+    }));
 
   return { nodes: layoutedNodes, edges: layoutedEdges };
 };

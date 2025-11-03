@@ -8,15 +8,20 @@
 - [x] Filtering features (hide debug nodes)
 - [x] CMakeLists and package.xml configuration
 - [x] Migration to uv for dependency management
+## Planned Features 🚀
+
+### High Priority
+- [x] WebSocket support for real-time updates (instead of polling)
+- [x] Highlight of node and all its topics (and their connection lines) on hover
+- [x] Dark mode theme
 
 ## Planned Features 🚀
 
 ### High Priority
-- [ ] WebSocket support for real-time updates (instead of polling)
 - [ ] Service and action visualization
-- [ ] Dark mode theme
 
 ### Medium Priority
+- [ ] Service and action visualization
 - [ ] Graph export (PNG, SVG, JSON)
 - [ ] Node/topic filtering by namespace
 - [ ] Search functionality

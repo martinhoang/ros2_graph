@@ -4,7 +4,11 @@ import './ROS2Node.css';
 
 const ROS2NodeComponent = memo(({ data, isConnectable }) => {
   return (
-    <div className="ros2-node">
+    <div 
+      className="ros2-node"
+      onMouseEnter={data.onMouseEnter}
+      onMouseLeave={data.onMouseLeave}
+    >
       <Handle
         type="target"
         position={Position.Left}

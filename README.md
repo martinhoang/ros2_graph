@@ -45,8 +45,10 @@ cd webapp && npm run dev
 ## Features
 
 - 🎨 Interactive graph with drag, zoom, pan
-- 🔄 Auto-refresh mode (updates every 2s)
+- 🔄 Real-time updates via WebSocket (auto-fallback to polling)
 - 🎯 Filter debug/internal nodes
+- ✨ Hover highlighting - see node connections instantly
+- 🌙 Dark mode theme toggle
 - 📦 Purple nodes = ROS2 nodes
 - 📡 White rounded boxes = Topics (color-coded by message type)
 - ⚡ Blazingly fast with uv (10-100x faster than pip)
@@ -57,6 +59,7 @@ cd webapp && npm run dev
 - `GET /api/node/<name>` - Node details
 - `GET /api/topic/<name>` - Topic details
 - `GET /api/health` - Health check
+- `WebSocket /ws/graph` - Real-time graph updates
 
 ## Project Structure
 

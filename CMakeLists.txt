@@ -13,7 +13,7 @@ find_package(rclpy REQUIRED)
 # Install Python backend
 install(PROGRAMS
   backend/ros2_graph_server.py
-  DESTINATION lib/${PROJECT_NAME}
+  DESTINATION share/${PROJECT_NAME}/backend
 )
 
 install(FILES
@@ -21,10 +21,15 @@ install(FILES
   DESTINATION share/${PROJECT_NAME}/backend
 )
 
-# Install launch script
+# Install launch script (kept in lib for ros2 run) and CLI wrapper (bin for direct PATH usage)
 install(PROGRAMS
   launch.sh
   DESTINATION lib/${PROJECT_NAME}
+)
+
+install(PROGRAMS
+  ros2_graph
+  DESTINATION bin
 )
 
 # Install webapp files
