@@ -3,19 +3,13 @@ import { Handle, Position } from 'reactflow';
 import './TopicNode.css';
 
 const TopicNodeComponent = memo(({ data, isConnectable }) => {
-  const getTopicColor = () => {
-    if (data.messageType?.includes('sensor_msgs')) return '#48bb78';
-    if (data.messageType?.includes('geometry_msgs')) return '#ed8936';
-    if (data.messageType?.includes('std_msgs')) return '#4299e1';
-    return '#9f7aea';
-  };
-
   return (
     <div 
-      className="topic-node" 
-      style={{ borderColor: getTopicColor() }}
+      className="topic-node"
       onMouseEnter={data.onMouseEnter}
       onMouseLeave={data.onMouseLeave}
+      onClick={data.onClick}
+      style={{ cursor: 'pointer' }}
     >
       <Handle
         type="target"

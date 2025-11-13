@@ -14,6 +14,10 @@
 - [x] WebSocket support for real-time updates (instead of polling)
 - [x] Highlight of node and all its topics (and their connection lines) on hover
 - [x] Dark mode theme
+- [x] Feature: Drag to select multiple nodes to move them together
+- [x] Feature: Auto-fit all the nodes inside the view
+- [x] Feature: Display information for ros2 nodes/topics when hovering > 2 secs OR clicking 
+- [x] Print the content of the topic messages in the info panel when a topic is selected
 
 ## Planned Features 🚀
 

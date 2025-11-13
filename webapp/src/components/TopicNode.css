@@ -1,6 +1,6 @@
 .topic-node {
   background: white;
-  border: 3px solid #9f7aea;
+  border: 3px solid #2d3748;
   border-radius: 20px;
   padding: 10px 15px;
   min-width: 120px;
@@ -70,7 +70,7 @@
 /* Dark mode support */
 .dark-mode .topic-node {
   background: #2a2a2a;
-  border-color: #9f7aea;
+  border-color: #0080ff;
 }
 
 .dark-mode .topic-label {

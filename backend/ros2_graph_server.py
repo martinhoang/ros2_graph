@@ -6,6 +6,8 @@ Provides REST API to query ROS2 graph information
 
 import rclpy
 from rclpy.node import Node
+from rclpy.serialization import deserialize_message
+from rosidl_runtime_py.utilities import get_message
 from flask import Flask, jsonify
 from flask_cors import CORS
 from flask_sock import Sock
@@ -21,6 +23,80 @@ class ROS2GraphService(Node):
     def __init__(self):
         super().__init__('ros2_graph_service')
         self.get_logger().info('ROS2 Graph Service initialized')
+        self.topic_subscriptions = {}  # Store active subscriptions
+        self.latest_messages = {}  # Store latest messages for each topic
+        self.subscription_lock = threading.Lock()
+
+    def subscribe_to_topic(self, topic_name, topic_type):
+        """Subscribe to a topic and store the latest message"""
+        with self.subscription_lock:
+            # If already subscribed, return
+            if topic_name in self.topic_subscriptions:
+                return True
+            
+            try:
+                # Get the message class dynamically
+                msg_module_name, msg_class_name = topic_type.rsplit('/', 1)
+                msg_module = get_message(topic_type)
+                
+                # Create a callback to store the latest message
+                def callback(msg):
+                    # Convert message to dictionary
+                    msg_dict = self._message_to_dict(msg)
+                    with self.subscription_lock:
+                        self.latest_messages[topic_name] = {
+                            'data': msg_dict,
+                            'timestamp': time.time()
+                        }
+                
+                # Create subscription
+                subscription = self.create_subscription(
+                    msg_module,
+                    topic_name,
+                    callback,
+                    10
+                )
+                
+                self.topic_subscriptions[topic_name] = subscription
+                self.get_logger().info(f'Subscribed to topic: {topic_name}')
+                return True
+                
+            except Exception as e:
+                self.get_logger().error(f'Error subscribing to topic {topic_name}: {str(e)}')
+                return False
+    
+    def unsubscribe_from_topic(self, topic_name):
+        """Unsubscribe from a topic"""
+        with self.subscription_lock:
+            if topic_name in self.topic_subscriptions:
+                self.destroy_subscription(self.topic_subscriptions[topic_name])
+                del self.topic_subscriptions[topic_name]
+                if topic_name in self.latest_messages:
+                    del self.latest_messages[topic_name]
+                self.get_logger().info(f'Unsubscribed from topic: {topic_name}')
+    
+    def get_latest_message(self, topic_name):
+        """Get the latest message for a topic"""
+        with self.subscription_lock:
+            return self.latest_messages.get(topic_name)
+    
+    def _message_to_dict(self, msg):
+        """Convert a ROS2 message to a dictionary"""
+        result = {}
+        for field_name in msg.get_fields_and_field_types().keys():
+            value = getattr(msg, field_name)
+            # Handle nested messages
+            if hasattr(value, 'get_fields_and_field_types'):
+                result[field_name] = self._message_to_dict(value)
+            # Handle arrays/lists
+            elif isinstance(value, (list, tuple)):
+                result[field_name] = [
+                    self._message_to_dict(item) if hasattr(item, 'get_fields_and_field_types') else item
+                    for item in value
+                ]
+            else:
+                result[field_name] = value
+        return result
 
     def get_graph_data(self):
         """Get complete ROS2 graph data including nodes, topics, and connections"""
@@ -261,6 +337,81 @@ def ws_graph(ws):
       ws_clients.remove(ws)
 
 
+@sock.route('/ws/topic/<path:topic_name>')
+def ws_topic(ws, topic_name):
+  """WebSocket endpoint for streaming topic messages"""
+  if not topic_name.startswith('/'):
+    topic_name = '/' + topic_name
+  
+  stop_streaming = threading.Event()
+  
+  def receive_messages():
+    """Thread to receive messages from client"""
+    try:
+      while not stop_streaming.is_set():
+        msg = ws.receive()
+        if msg == 'close':
+          stop_streaming.set()
+          break
+    except Exception:
+      stop_streaming.set()
+  
+  try:
+    if ros2_node is None:
+      ws.send(json.dumps({'error': 'ROS2 node not initialized'}))
+      return
+    
+    # Get topic type
+    topic_names_and_types = ros2_node.get_topic_names_and_types()
+    topic_type = None
+    for name, types in topic_names_and_types:
+      if name == topic_name:
+        topic_type = types[0] if types else None
+        break
+    
+    if not topic_type:
+      ws.send(json.dumps({'error': 'Topic not found'}))
+      return
+    
+    # Subscribe to the topic
+    if not ros2_node.subscribe_to_topic(topic_name, topic_type):
+      ws.send(json.dumps({'error': 'Failed to subscribe to topic'}))
+      return
+    
+    # Start receive thread
+    receive_thread = threading.Thread(target=receive_messages, daemon=True)
+    receive_thread.start()
+    
+    # Stream messages
+    last_timestamp = 0
+    while not stop_streaming.is_set():
+      latest_msg = ros2_node.get_latest_message(topic_name)
+      if latest_msg and latest_msg['timestamp'] > last_timestamp:
+        try:
+          ws.send(json.dumps({
+            'type': 'message',
+            'topic': topic_name,
+            'data': latest_msg['data'],
+            'timestamp': latest_msg['timestamp']
+          }))
+          last_timestamp = latest_msg['timestamp']
+        except Exception:
+          break
+      
+      time.sleep(0.05)  # 20Hz update rate
+      
+  except Exception as e:
+    try:
+      ws.send(json.dumps({'error': str(e)}))
+    except Exception:
+      pass
+  finally:
+    stop_streaming.set()
+    # Unsubscribe when connection closes
+    if ros2_node:
+      ros2_node.unsubscribe_from_topic(topic_name)
+
+
 # Global ROS2 node
 ros2_node = None
 ros2_thread = None
@@ -291,6 +442,11 @@ def get_node(node_name):
         if ros2_node is None:
             return jsonify({'error': 'ROS2 node not initialized'}), 500
         
+        # Flask's <path:> converter already handles the path correctly
+        # Just ensure it starts with /
+        if not node_name.startswith('/'):
+            node_name = '/' + node_name
+        
         data = ros2_node.get_node_details(node_name)
         if data is None:
             return jsonify({'error': 'Node not found'}), 404
@@ -306,6 +462,11 @@ def get_topic(topic_name):
     try:
         if ros2_node is None:
             return jsonify({'error': 'ROS2 node not initialized'}), 500
+        
+        # Flask's <path:> converter already handles the path correctly
+        # Just ensure it starts with /
+        if not topic_name.startswith('/'):
+            topic_name = '/' + topic_name
         
         data = ros2_node.get_topic_details(topic_name)
         if data is None:

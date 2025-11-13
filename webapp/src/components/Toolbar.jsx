@@ -7,6 +7,7 @@ const Toolbar = ({
   onToggleDebugNodes,
   onToggleDarkMode,
   onResetLayout,
+  onFitView,
   autoRefresh,
   hideDebugNodes,
   darkMode,
@@ -59,6 +60,14 @@ const Toolbar = ({
           title="Reset node positions to automatic layout"
         >
           🔄 Reset Layout
+        </button>
+
+        <button
+          className="toolbar-button"
+          onClick={onFitView}
+          title="Fit all nodes in view"
+        >
+          🔍 Fit View
         </button>
       </div>
 

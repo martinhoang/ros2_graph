@@ -1,6 +1,6 @@
 .app {
   width: 100%;
-  height: 100%;
+  height: 100vh;
   display: flex;
   flex-direction: column;
   background-color: #ffffff;
@@ -15,6 +15,15 @@
 
 .reactflow-wrapper {
   flex-grow: 1;
+  min-height: 0; /* allow flex child to shrink properly */
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+/* Ensure ReactFlow canvas fills wrapper */
+.reactflow-wrapper .react-flow {
+  inset: 0;
 }
 
 .error-banner {
@@ -29,9 +38,54 @@
 /* React Flow custom styles */
 .react-flow__node {
   font-size: 12px;
+  border-radius: 0 !important;
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
 }
 
+.react-flow__node-default,
+.react-flow__node-input,
+.react-flow__node-output {
+  border-radius: 0 !important;
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+}
+
+.react-flow__node.selected,
+.react-flow__node:hover {
+  box-shadow: none !important;
+  outline: none !important;
+}
+
+.react-flow__node.selected .react-flow__node-default,
+.react-flow__node.selected .react-flow__node-input,
+.react-flow__node.selected .react-flow__node-output,
+.react-flow__node:hover .react-flow__node-default,
+.react-flow__node:hover .react-flow__node-input,
+.react-flow__node:hover .react-flow__node-output {
+  box-shadow: none !important;
+  outline: none !important;
+}
+
+/* Remove any pseudo-elements that might create corners */
+.react-flow__node::before,
+.react-flow__node::after,
+.react-flow__node-default::before,
+.react-flow__node-default::after {
+  display: none !important;
+}
+
+/* Ensure the resize handle doesn't show */
+.react-flow__resize-control {
+  display: none !important;
+}
+
+/* Edge colors - dark in light mode, white in dark mode */
 .react-flow__edge-path {
+  stroke: #2d3748;
   stroke-width: 2;
   transition: stroke 0.2s, stroke-width 0.2s;
 }
@@ -43,13 +97,29 @@
 /* Hover highlighting */
 .react-flow__node.highlighted {
   opacity: 1;
-  box-shadow: 0 0 10px rgba(100, 200, 255, 0.8);
-  transition: box-shadow 0.2s;
+  box-shadow: none !important;
+  transition: opacity 0.2s;
+}
+
+.react-flow__node.highlighted .react-flow__node-default,
+.react-flow__node.highlighted .react-flow__node-input,
+.react-flow__node.highlighted .react-flow__node-output {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
 }
 
 .react-flow__node.dimmed {
   opacity: 0.3;
   transition: opacity 0.2s;
+}
+
+.react-flow__node.dimmed .react-flow__node-default,
+.react-flow__node.dimmed .react-flow__node-input,
+.react-flow__node.dimmed .react-flow__node-output {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
 }
 
 .react-flow__edge.highlighted .react-flow__edge-path {
@@ -94,5 +164,10 @@
 
 .app.dark-mode .react-flow__background path {
   fill: #333333;
+}
+
+/* Dark mode edge colors - white */
+.app.dark-mode .react-flow__edge-path {
+  stroke: #ffffff;
 }
 

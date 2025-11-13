@@ -87,10 +87,9 @@ export const layoutGraph = (nodes, edges, hideDebugNodes = true) => {
       ...edge,
       animated: true,
       style: {
-        stroke: edge.data?.type === 'publisher' ? '#48bb78' : '#4299e1',
         strokeWidth: 2,
       },
-      type: 'smoothstep',
+      type: 'default',
     }));
 
   return { nodes: layoutedNodes, edges: layoutedEdges };

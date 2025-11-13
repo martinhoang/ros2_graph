@@ -8,6 +8,8 @@ const ROS2NodeComponent = memo(({ data, isConnectable }) => {
       className="ros2-node"
       onMouseEnter={data.onMouseEnter}
       onMouseLeave={data.onMouseLeave}
+      onClick={data.onClick}
+      style={{ cursor: 'pointer' }}
     >
       <Handle
         type="target"

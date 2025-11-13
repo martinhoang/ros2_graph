@@ -14,7 +14,10 @@ export const fetchGraphData = async () => {
 
 export const fetchNodeInfo = async (nodeName) => {
   try {
-    const response = await axios.get(`${API_BASE_URL}/node/${encodeURIComponent(nodeName)}`);
+    // Split by '/', filter out empty strings (from leading '/'), encode parts, then join
+    const parts = nodeName.split('/').filter(part => part !== '');
+    const encodedName = parts.map(part => encodeURIComponent(part)).join('/');
+    const response = await axios.get(`${API_BASE_URL}/node/${encodedName}`);
     return response.data;
   } catch (error) {
     console.error('Error fetching node info:', error);
@@ -24,7 +27,10 @@ export const fetchNodeInfo = async (nodeName) => {
 
 export const fetchTopicInfo = async (topicName) => {
   try {
-    const response = await axios.get(`${API_BASE_URL}/topic/${encodeURIComponent(topicName)}`);
+    // Split by '/', filter out empty strings (from leading '/'), encode parts, then join
+    const parts = topicName.split('/').filter(part => part !== '');
+    const encodedName = parts.map(part => encodeURIComponent(part)).join('/');
+    const response = await axios.get(`${API_BASE_URL}/topic/${encodedName}`);
     return response.data;
   } catch (error) {
     console.error('Error fetching topic info:', error);
