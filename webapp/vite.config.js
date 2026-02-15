@@ -30,6 +30,15 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
-    assetsDir: 'assets'
+    assetsDir: 'assets',
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          three: ['three'],
+          regl: ['regl'],
+          deckgl: ['@deck.gl/core', '@deck.gl/layers'],
+        }
+      }
+    }
   }
 })

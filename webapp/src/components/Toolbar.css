@@ -2,10 +2,11 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 15px 20px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  gap: 12px;
+  padding: 10px 14px;
+  background: linear-gradient(135deg, #5468d4 0%, #6a4292 100%);
   color: white;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
   z-index: 1000;
   transition: background 0.3s;
 }
@@ -17,33 +18,45 @@
 .toolbar-section {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 
 .toolbar-title {
-  font-size: 20px;
+  font-size: 17px;
   font-weight: 700;
   margin: 0;
+  letter-spacing: 0.2px;
 }
 
 .toolbar-controls {
-  gap: 10px;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.toolbar-widgets {
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+  border-left: 1px solid rgba(255, 255, 255, 0.2);
+  padding-left: 10px;
 }
 
 .toolbar-button {
-  padding: 8px 16px;
-  background: rgba(255, 255, 255, 0.2);
+  padding: 7px 12px;
+  background: rgba(255, 255, 255, 0.16);
   border: 1px solid rgba(255, 255, 255, 0.3);
-  border-radius: 6px;
+  border-radius: 8px;
   color: white;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
-  transition: all 0.3s ease;
-  font-size: 14px;
+  transition: all 0.2s ease;
+  font-size: 13px;
+  min-height: 34px;
 }
 
 .toolbar-button:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.28);
   transform: translateY(-1px);
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
 }
@@ -58,20 +71,20 @@
 }
 
 .toolbar-button.active {
-  background: rgba(255, 255, 255, 0.4);
+  background: rgba(255, 255, 255, 0.34);
   border-color: rgba(255, 255, 255, 0.6);
 }
 
 .toolbar-info {
-  font-size: 14px;
+  font-size: 13px;
   display: flex;
-  gap: 15px;
+  gap: 10px;
 }
 
 .status-indicator {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 }
 
 .status-indicator.ws-connected {
@@ -103,7 +116,8 @@
 @media (max-width: 768px) {
   .toolbar {
     flex-direction: column;
-    gap: 10px;
+    gap: 8px;
+    align-items: stretch;
   }
 
   .toolbar-section {
@@ -111,7 +125,11 @@
     justify-content: center;
   }
 
+  .toolbar-controls {
+    justify-content: center;
+  }
+
   .toolbar-info {
-    flex-direction: column;
+    justify-content: center;
   }
 }

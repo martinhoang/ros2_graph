@@ -6,14 +6,20 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "lint": "eslint src --ext js,jsx --report-unused-disable-directives --max-warnings 0"
   },
   "dependencies": {
+    "@deck.gl/core": "^9.2.7",
+    "@deck.gl/layers": "^9.2.7",
+    "axios": "^1.6.0",
+    "dagre": "^0.8.5",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "reactflow": "^11.10.0",
-    "axios": "^1.6.0",
-    "dagre": "^0.8.5"
+    "regl": "^2.1.1",
+    "three": "^0.182.0"
   },
   "devDependencies": {
     "@types/react": "^18.2.0",

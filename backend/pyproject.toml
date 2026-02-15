@@ -8,5 +8,6 @@ dependencies = [
     "flask-cors>=4.0.0",
     "flask-sock>=0.7.0",
     "numpy>=1.24.4",
+    "opencv-python-headless>=4.5.0",
     "pyyaml>=6.0.3",
 ]

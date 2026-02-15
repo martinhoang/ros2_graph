@@ -4,11 +4,27 @@ const API_BASE_URL = '/api';
 
 export const fetchGraphData = async () => {
   try {
-    const response = await axios.get(`${API_BASE_URL}/graph`);
+    const response = await axios.get(`${API_BASE_URL}/graph`, {
+      params: { _ts: Date.now() },
+      headers: {
+        'Cache-Control': 'no-cache',
+        Pragma: 'no-cache',
+      },
+    });
     return response.data;
   } catch (error) {
     console.error('Error fetching graph data:', error);
     throw new Error('Failed to connect to ROS2 backend. Make sure the backend server is running.');
+  }
+};
+
+export const resetGraphState = async () => {
+  try {
+    const response = await axios.post(`${API_BASE_URL}/reset`);
+    return response.data;
+  } catch (error) {
+    console.error('Error resetting graph state:', error);
+    throw new Error('Failed to reset graph state in backend.');
   }
 };
 

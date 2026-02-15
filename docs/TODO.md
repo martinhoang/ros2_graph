@@ -18,6 +18,10 @@
 - [x] Feature: Auto-fit all the nodes inside the view
 - [x] Feature: Display information for ros2 nodes/topics when hovering > 2 secs OR clicking 
 - [x] Print the content of the topic messages in the info panel when a topic is selected
+- [x] Persistent highlight on click until click elsewhere
+- [x] WebSocket subscription cleanup on panel close
+- [x] CompressedDepth image rendering with colormap
+- [x] ROS2 logging integration (replace print with logger)
 
 ## Planned Features 🚀
 

@@ -38,10 +38,18 @@ class TopicMessageClient {
         try {
           const data = JSON.parse(event.data);
           if (data.error) {
-            console.error('Topic WebSocket error:', data.error);
+            console.error('Topic error:', data.error);
             if (this.onError) {
               this.onError(data.error);
             }
+          } else if (data.type === 'warning') {
+            console.warn('Topic warning:', data.message);
+            if (this.onError) {
+              this.onError(`⚠️ ${data.message}`);
+            }
+          } else if (data.type === 'info') {
+            console.log('Topic info:', data.message);
+            // Info messages are informational, don't display as errors
           } else if (data.type === 'message') {
             if (this.onMessage) {
               this.onMessage(data);
@@ -55,7 +63,10 @@ class TopicMessageClient {
       this.ws.onerror = (error) => {
         console.error('Topic WebSocket error:', error);
         if (this.onError) {
-          this.onError('WebSocket connection error');
+          this.onError(
+            `WebSocket connection failed to ${this.topicName}. ` +
+            `Ensure the backend server is running and accessible.`
+          );
         }
       };
 

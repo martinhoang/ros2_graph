@@ -10,10 +10,11 @@ const TopicNodeComponent = memo(({ data, isConnectable }) => {
       onMouseLeave={data.onMouseLeave}
       onClick={data.onClick}
       style={{ cursor: 'pointer' }}
+      title={`${data.label}\n${data.messageType || ''}`}
     >
       <Handle
         type="target"
-        position={Position.Left}
+        position={Position.Top}
         isConnectable={isConnectable}
         className="topic-handle"
       />
@@ -32,7 +33,7 @@ const TopicNodeComponent = memo(({ data, isConnectable }) => {
       </div>
       <Handle
         type="source"
-        position={Position.Right}
+        position={Position.Bottom}
         isConnectable={isConnectable}
         className="topic-handle"
       />

@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import ReactFlow, {
   MiniMap,
   Controls,
@@ -14,7 +14,7 @@ import ROS2NodeComponent from './components/ROS2Node';
 import TopicNodeComponent from './components/TopicNode';
 import Toolbar from './components/Toolbar';
 import InfoPanel from './components/InfoPanel';
-import { fetchGraphData, fetchNodeInfo, fetchTopicInfo } from './api/ros2Api';
+import { fetchGraphData, fetchNodeInfo, fetchTopicInfo, resetGraphState } from './api/ros2Api';
 import WebSocketClient from './api/websocketClient';
 import { layoutGraph } from './utils/layout';
 import './App.css';
@@ -32,14 +32,19 @@ function App() {
   const [autoRefresh, setAutoRefresh] = useState(true); // Enable polling by default
   const [hideDebugNodes, setHideDebugNodes] = useState(true); // Hide debug nodes by default
   const [darkMode, setDarkMode] = useState(true); // Dark mode enabled by default
+  const [showGrid, setShowGrid] = useState(false);
   const [hoveredNodeId, setHoveredNodeId] = useState(null);
+  const [selectedNodeId, setSelectedNodeId] = useState(null); // Persists until click elsewhere
   const [selectedNodeInfo, setSelectedNodeInfo] = useState(null);
-  const [hoverTimer, setHoverTimer] = useState(null);
   const [isSelecting, setIsSelecting] = useState(false);
+  const [pcRenderer, setPcRenderer] = useState(() => {
+    try { return localStorage.getItem('ros2_graph_pc_renderer') || 'threejs'; } catch { return 'threejs'; }
+  });
   const { fitView } = useReactFlow();
   const wsClientRef = useRef(null);
   const useWebSocketRef = useRef(false); // Disabled by default - use polling instead
   const hoveredNodeIdRef = useRef(null);
+  const selectedNodeIdRef = useRef(null); // Track selected node for persistent highlight
   const userMovedNodesRef = useRef(new Map()); // Track user-adjusted node positions
   const initialLoadRef = useRef(true);
   const isDraggingRef = useRef(false); // Track active drag to pause refreshes
@@ -49,6 +54,30 @@ function App() {
   const loadingDelayRef = useRef(null); // Timeout id for delayed loading activation
   const fetchInProgressRef = useRef(false); // Skip overlapping polls
   const forceResetLayoutRef = useRef(false); // Flag to force layout reset
+  const lastGraphDataRef = useRef(null); // Last raw graph payload from backend
+  const resetInProgressRef = useRef(false); // Prevent overlapping reset operations
+  const resetRecoveryTimerRef = useRef(null); // Background retry timer after reset
+
+  // Persist pointcloud renderer choice
+  useEffect(() => {
+    try { localStorage.setItem('ros2_graph_pc_renderer', pcRenderer); } catch {}
+  }, [pcRenderer]);
+
+  // Toolbar widget definitions (extensible — add more entries for future features)
+  const toolbarWidgets = useMemo(() => [
+    {
+      id: 'pc-renderer',
+      type: 'dropdown',
+      label: '3D',
+      value: pcRenderer,
+      onChange: setPcRenderer,
+      options: [
+        { value: 'threejs', label: 'Three.js', description: 'Full-featured 3D engine' },
+        { value: 'regl', label: 'regl', description: 'Lightweight WebGL shaders' },
+        { value: 'deckgl', label: 'deck.gl', description: 'Large-scale visualization' },
+      ],
+    },
+  ], [pcRenderer]);
 
   // Load saved layout from localStorage
   const loadSavedLayout = useCallback(() => {
@@ -79,10 +108,14 @@ function App() {
     }
   }, []);
 
-  // Keep ref in sync with state
+  // Keep refs in sync with state
   useEffect(() => {
     hoveredNodeIdRef.current = hoveredNodeId;
   }, [hoveredNodeId]);
+
+  useEffect(() => {
+    selectedNodeIdRef.current = selectedNodeId;
+  }, [selectedNodeId]);
 
   // Custom onNodesChange that tracks user movements
   const handleNodesChange = useCallback((changes) => {
@@ -139,6 +172,7 @@ function App() {
   }, [edges]);
 
   // Pure highlight decoration without triggering two-stage state updates
+  // Use selectedNodeId for persistent highlight, fall back to hoveredNodeId for hover preview
   const decorateHighlight = useCallback((rawNodes, rawEdges, nodeId) => {
     if (!nodeId) {
       return {
@@ -164,48 +198,24 @@ function App() {
   const handleNodeMouseEnter = useCallback((nodeId) => {
     // Don't show hover effects during selection
     if (isSelecting) return;
-    
+    // Highlight connections only — InfoPanel opens on click
     setHoveredNodeId(nodeId);
-    
-    // Clear any existing timer
-    if (hoverTimer) {
-      clearTimeout(hoverTimer);
-    }
-    
-    // Set a 2-second timer to show info panel
-    const timer = setTimeout(() => {
-      // Double-check we're not selecting when timer fires
-      if (!isSelecting) {
-        fetchNodeDetails(nodeId);
-      }
-    }, 2000);
-    
-    setHoverTimer(timer);
-  }, [hoverTimer, isSelecting]);
+  }, [isSelecting]);
 
   const handleNodeMouseLeave = useCallback(() => {
     setHoveredNodeId(null);
-    
-    // Clear the timer when mouse leaves
-    if (hoverTimer) {
-      clearTimeout(hoverTimer);
-      setHoverTimer(null);
-    }
-  }, [hoverTimer]);
+  }, []);
 
   const handleNodeClick = useCallback((nodeId) => {
     // Don't show info panel if we're in selection mode
     if (isSelecting) return;
     
-    // Clear any hover timer
-    if (hoverTimer) {
-      clearTimeout(hoverTimer);
-      setHoverTimer(null);
-    }
+    // Set selected node for persistent highlight
+    setSelectedNodeId(nodeId);
     
     // Fetch and show details immediately on click
     fetchNodeDetails(nodeId);
-  }, [hoverTimer, isSelecting]);
+  }, [isSelecting]);
 
   const fetchNodeDetails = async (nodeId) => {
     // Extract the type and name from the node ID
@@ -257,15 +267,10 @@ function App() {
     }
   };
 
-  const handleCloseInfoPanel = () => {
+  const handleCloseInfoPanel = useCallback(() => {
     setSelectedNodeInfo(null);
-    
-    // Clear any hover timer
-    if (hoverTimer) {
-      clearTimeout(hoverTimer);
-      setHoverTimer(null);
-    }
-  };
+    setSelectedNodeId(null); // Clear highlight when closing panel
+  }, []);
 
   // Shared function to process server graph data into state while respecting saved layout and drag pause
   const applyGraphData = useCallback((graphData, { fromPending = false } = {}) => {
@@ -289,7 +294,9 @@ function App() {
       };
     });
 
-    const highlighted = decorateHighlight(preparedNodes, layoutedEdges, hoveredNodeIdRef.current);
+    // Use selected node for highlight if available, otherwise use hovered node
+    const highlightNodeId = selectedNodeIdRef.current || hoveredNodeIdRef.current;
+    const highlighted = decorateHighlight(preparedNodes, layoutedEdges, highlightNodeId);
 
     setNodes(prev => {
       // If forcing reset, bypass comparison and use all new positions
@@ -342,11 +349,13 @@ function App() {
     }
   }, [decorateHighlight, hideDebugNodes, hoveredNodeIdRef]);
 
-  // Handle highlighting when hovered node changes without clearing graph first
+  // Handle highlighting when hovered or selected node changes
   useEffect(() => {
-    // Only recompute when hoveredNodeId changes to avoid feedback loops
+    // Use selected node for persistent highlight, or hovered for preview
+    const highlightNodeId = selectedNodeId || hoveredNodeId;
+    
     setNodes(prevNodes => {
-      const decorated = decorateHighlight(prevNodes, edges, hoveredNodeId);
+      const decorated = decorateHighlight(prevNodes, edges, highlightNodeId);
       return decorated.nodes.map(newNode => {
         const existing = prevNodes.find(p => p.id === newNode.id);
         if (!existing) return newNode;
@@ -355,7 +364,7 @@ function App() {
       });
     });
     setEdges(prevEdges => {
-      const decorated = decorateHighlight(nodes, prevEdges, hoveredNodeId);
+      const decorated = decorateHighlight(nodes, prevEdges, highlightNodeId);
       return decorated.edges.map(newEdge => {
         const existing = prevEdges.find(e => e.id === newEdge.id);
         if (!existing) return newEdge;
@@ -363,11 +372,11 @@ function App() {
         return newEdge;
       });
     });
-  }, [hoveredNodeId, decorateHighlight]);
+  }, [hoveredNodeId, selectedNodeId, decorateHighlight]);
 
-  const loadGraph = useCallback(async () => {
+  const loadGraph = useCallback(async ({ force = false } = {}) => {
     // Avoid overlapping fetches which cause multiple quick state flips
-    if (fetchInProgressRef.current) return;
+    if (fetchInProgressRef.current && !force) return;
     fetchInProgressRef.current = true;
 
     // Only expose visual loading if operation exceeds threshold (reduce flicker)
@@ -383,6 +392,7 @@ function App() {
     let localError = null;
     try {
       const data = await fetchGraphData();
+      lastGraphDataRef.current = data;
       if (isDraggingRef.current) {
         pendingGraphRef.current = data; // queue while dragging
       } else {
@@ -401,6 +411,7 @@ function App() {
       loadingRef.current = false;
       setLoading(false); // Single transition instead of rapid toggle
       fetchInProgressRef.current = false;
+      if (!localError && error) setError(null);
       if (localError && localError !== error) setError(localError);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -411,6 +422,7 @@ function App() {
     if (!useWebSocketRef.current) return;
 
     const handleWebSocketUpdate = (graphData) => {
+      lastGraphDataRef.current = graphData;
       const { nodes: layoutedNodes, edges: layoutedEdges } = layoutGraph(
         graphData.nodes,
         graphData.edges,
@@ -462,25 +474,36 @@ function App() {
   }, [loadGraph]);
 
   useEffect(() => {
-    // Cleanup hover timer on unmount
+    // Cleanup on unmount
     return () => {
-      if (hoverTimer) {
-        clearTimeout(hoverTimer);
+      if (resetRecoveryTimerRef.current) {
+        clearTimeout(resetRecoveryTimerRef.current);
+        resetRecoveryTimerRef.current = null;
       }
     };
-  }, [hoverTimer]);
+  }, []);
 
   useEffect(() => {
     if (!useWebSocketRef.current && autoRefresh) {
       const interval = setInterval(() => {
         loadGraph();
-      }, 1000); // Poll every 1 second for near real-time updates
+      }, 3000); // Poll every 3 seconds to reduce backend load/noise
       return () => clearInterval(interval);
     }
   }, [autoRefresh, loadGraph]);
 
   const handleRefresh = () => {
-    loadGraph();
+    // Refresh = re-apply default layout from current known graph only (no re-discovery)
+    const currentGraph = lastGraphDataRef.current;
+    if (!currentGraph) return;
+
+    // Clear user-adjusted positions to restore default layout
+    userMovedNodesRef.current.clear();
+    savedLayoutRef.current = new Map();
+    try { localStorage.removeItem(LAYOUT_STORAGE_KEY); } catch {}
+
+    forceResetLayoutRef.current = true;
+    applyGraphData(currentGraph);
   };
 
   const handleToggleAutoRefresh = () => {
@@ -496,31 +519,105 @@ function App() {
     setDarkMode(!darkMode);
   };
 
-  const handleResetLayout = () => {
-    // Clear user-adjusted positions and saved layout
-    userMovedNodesRef.current.clear();
-    savedLayoutRef.current = new Map();
-    try { localStorage.removeItem(LAYOUT_STORAGE_KEY); } catch {}
-    
-    // Set flag to force re-layout on next graph update
-    forceResetLayoutRef.current = true;
-    
-    // Force re-layout by reloading the graph
-    loadGraph();
+  const handleToggleGrid = () => {
+    setShowGrid(!showGrid);
   };
 
-  const handleFitView = () => {
-    fitView({ padding: 0.2, duration: 400 });
+  const handleResetLayout = async () => {
+    // Ignore repeated clicks while reset is already running
+    if (resetInProgressRef.current) return;
+    resetInProgressRef.current = true;
+
+    try {
+      if (resetRecoveryTimerRef.current) {
+        clearTimeout(resetRecoveryTimerRef.current);
+        resetRecoveryTimerRef.current = null;
+      }
+
+      // Show resetting status
+      setLoading(true);
+      setError(null);
+
+      // Reset = clear graph/cache, force backend runtime reset, then re-discover
+      setSelectedNodeInfo(null);
+      setHoveredNodeId(null);
+      setNodes([]);
+      setEdges([]);
+
+      // Clear user-adjusted positions and saved layout
+      userMovedNodesRef.current.clear();
+      savedLayoutRef.current = new Map();
+      try { localStorage.removeItem(LAYOUT_STORAGE_KEY); } catch {}
+
+      // Clear local cached graph data
+      lastGraphDataRef.current = null;
+      pendingGraphRef.current = null;
+
+      // Set flag to force re-layout on next graph update
+      forceResetLayoutRef.current = true;
+
+      // Call backend reset
+      try {
+        await resetGraphState();
+      } catch (err) {
+        console.warn('Backend reset failed, continuing:', err);
+      }
+
+      // Aggressive recovery with recursive retry pattern
+      const attemptRecovery = async (attemptsLeft) => {
+        if (attemptsLeft <= 0) {
+          setLoading(false);
+          setError('Graph discovery timeout. Nodes may still be starting. Click Refresh to retry.');
+          return;
+        }
+
+        try {
+          const data = await fetchGraphData();
+          lastGraphDataRef.current = data;
+          const hasContent = data && (
+            (Array.isArray(data.nodes) && data.nodes.length > 0) ||
+            (Array.isArray(data.edges) && data.edges.length > 0)
+          );
+
+          if (hasContent) {
+            applyGraphData(data);
+            setLoading(false);
+            setError(null);
+            console.log('Reset complete: graph recovered');
+          } else {
+            // No content yet, retry after delay
+            resetRecoveryTimerRef.current = setTimeout(() => {
+              attemptRecovery(attemptsLeft - 1);
+            }, 600);
+          }
+        } catch (err) {
+          console.error('Recovery attempt failed:', err);
+          // Retry on error
+          resetRecoveryTimerRef.current = setTimeout(() => {
+            attemptRecovery(attemptsLeft - 1);
+          }, 800);
+        }
+      };
+
+      // Start recovery with up to 40 attempts (~30+ seconds)
+      await attemptRecovery(40);
+
+    } finally {
+      resetInProgressRef.current = false;
+    }
   };
+
+  const handleFitView = useCallback(() => {
+    try {
+      fitView({ padding: 0.2, duration: 400, includeHiddenNodes: false });
+    } catch (error) {
+      console.warn('Fit view failed:', error);
+    }
+  }, [fitView]);
 
   const handleSelectionStart = useCallback(() => {
     setIsSelecting(true);
-    // Clear any pending hover timer
-    if (hoverTimer) {
-      clearTimeout(hoverTimer);
-      setHoverTimer(null);
-    }
-  }, [hoverTimer]);
+  }, []);
 
   const handleSelectionEnd = useCallback(() => {
     setIsSelecting(false);
@@ -533,13 +630,16 @@ function App() {
         onToggleAutoRefresh={handleToggleAutoRefresh}
         onToggleDebugNodes={handleToggleDebugNodes}
         onToggleDarkMode={handleToggleDarkMode}
+        onToggleGrid={handleToggleGrid}
         onResetLayout={handleResetLayout}
         onFitView={handleFitView}
         autoRefresh={autoRefresh}
         hideDebugNodes={hideDebugNodes}
         darkMode={darkMode}
+        showGrid={showGrid}
         loading={loading}
         wsConnected={wsClientRef.current?.isConnected() || false}
+        widgets={toolbarWidgets}
       />
       {error && (
         <div className="error-banner">
@@ -549,6 +649,7 @@ function App() {
       <InfoPanel 
         nodeInfo={selectedNodeInfo}
         onClose={handleCloseInfoPanel}
+        pcRenderer={pcRenderer}
       />
         <div className="reactflow-wrapper">
           <ReactFlow
@@ -569,10 +670,11 @@ function App() {
             selectionKeyCode={null}
             onSelectionStart={handleSelectionStart}
             onSelectionEnd={handleSelectionEnd}
+            onPaneClick={() => setSelectedNodeId(null)}
           >
             <Controls />
             <MiniMap />
-            <Background variant="dots" gap={12} size={1} />
+            {showGrid ? <Background variant="dots" gap={12} size={1} /> : null}
           </ReactFlow>
         </div>
     </div>

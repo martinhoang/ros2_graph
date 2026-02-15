@@ -9,6 +9,7 @@ npm-debug.log*
 .DS_Store
 *.pyc
 build/
+.build/
 install/
 # uv
 .venv/
