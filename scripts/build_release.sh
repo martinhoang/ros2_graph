@@ -8,7 +8,8 @@ RELEASE_DIR="$ROOT_DIR/.build/release"
 BACKEND_PORT=5000
 FRONTEND_PORT=8080
 TARGET_ARCH="auto"
-
+INSTALL_BUNDLE=false
+INSTALL_DIR="$HOME/.local/share/ros2-graph"
 usage() {
   cat <<EOF
 Usage: $0 [options]
@@ -19,6 +20,8 @@ Options:
   --arch <x86_64|arm64|auto>  Target architecture (default: auto)
   --backend-port <port>        Default backend port in bundled launcher (default: 5000)
   --frontend-port <port>       Default frontend port in bundled launcher (default: 8080)
+  -i, --install                Install the built bundle to system (default: ~/.local/share/ros2-graph)
+  --install-dir <path>         Custom installation directory (implies --install)
   -h, --help                   Show help
 EOF
 }
@@ -28,6 +31,8 @@ while [[ $# -gt 0 ]]; do
     --arch) TARGET_ARCH="$2"; shift 2 ;;
     --backend-port) BACKEND_PORT="$2"; shift 2 ;;
     --frontend-port) FRONTEND_PORT="$2"; shift 2 ;;
+    -i|--install) INSTALL_BUNDLE=true; shift ;;
+    --install-dir) INSTALL_DIR="$2"; INSTALL_BUNDLE=true; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Unknown option: $1" >&2; usage; exit 1 ;;
   esac
@@ -54,9 +59,9 @@ if [[ "$TARGET_ARCH" != "x86_64" && "$TARGET_ARCH" != "arm64" ]]; then
 fi
 
 if [[ "$TARGET_ARCH" != "$HOST_ARCH" ]]; then
-  echo "Cross-compiling Python+ROS2 binary from $HOST_ARCH to $TARGET_ARCH is not supported in this script." >&2
-  echo "Run this script on a native $TARGET_ARCH Ubuntu machine (or VM) to produce that release." >&2
-  exit 1
+  echo "Note: Building $TARGET_ARCH bundle on $HOST_ARCH host (cross-arch build)"
+  echo "This works because the bundle contains only source code and static assets."
+  echo ""
 fi
 
 if [[ -z "${ROS_DISTRO:-}" ]]; then
@@ -250,3 +255,76 @@ EOF_README
 (cd "$RELEASE_DIR" && tar -czf "${BUNDLE_NAME}.tar.gz" "$BUNDLE_NAME")
 
 echo "Release ready: $RELEASE_DIR/${BUNDLE_NAME}.tar.gz"
+
+if [[ "$INSTALL_BUNDLE" == "true" ]]; then
+  echo ""
+  echo "[Installing to $INSTALL_DIR]"
+  
+  # Create installation directory
+  mkdir -p "$INSTALL_DIR"
+  
+  # Remove old installation if exists
+  if [[ -d "$INSTALL_DIR/ros2-graph" ]]; then
+    echo "Removing previous installation..."
+    rm -rf "$INSTALL_DIR/ros2-graph"
+  fi
+  
+  # Copy bundle to installation directory
+  echo "Copying application files..."
+  cp -r "$BUNDLE_DIR" "$INSTALL_DIR/ros2-graph"
+  
+  # Create launcher script
+  BIN_DIR="$HOME/.local/bin"
+  mkdir -p "$BIN_DIR"
+  
+  cat > "$BIN_DIR/ros2-graph" <<'EOF_LAUNCHER'
+#!/usr/bin/env bash
+INSTALL_DIR="__INSTALL_DIR__"
+exec "$INSTALL_DIR/ros2-graph/run.sh" "$@"
+EOF_LAUNCHER
+  
+  # Replace placeholder with actual install dir
+  sed -i "s|__INSTALL_DIR__|$INSTALL_DIR|g" "$BIN_DIR/ros2-graph"
+  chmod +x "$BIN_DIR/ros2-graph"
+  
+  # Create alternative launcher with underscore naming
+  ln -sf "$BIN_DIR/ros2-graph" "$BIN_DIR/ros2_graph"
+  
+  # Create desktop entry (optional, for GUI environments)
+  DESKTOP_DIR="$HOME/.local/share/applications"
+  if [[ -d "$DESKTOP_DIR" ]] || mkdir -p "$DESKTOP_DIR" 2>/dev/null; then
+    cat > "$DESKTOP_DIR/ros2-graph.desktop" <<EOF_DESKTOP
+[Desktop Entry]
+Name=ROS2 Graph Viewer
+Comment=Visualize ROS2 computation graph
+Exec=$BIN_DIR/ros2-graph
+Icon=network-wired
+Terminal=true
+Type=Application
+Categories=Development;ROS;
+EOF_DESKTOP
+    chmod +x "$DESKTOP_DIR/ros2-graph.desktop"
+  fi
+  
+  echo ""
+  echo "====================================="
+  echo "Installation complete!"
+  echo "====================================="
+  echo "Installed to: $INSTALL_DIR/ros2-graph"
+  echo "Launchers: $BIN_DIR/ros2-graph (or ros2_graph)"
+  echo ""
+  echo "Usage:"
+  echo "  1. Source your ROS2 environment:"
+  echo "       source /opt/ros/<distro>/setup.bash"
+  echo ""
+  echo "  2. Run the application:"
+  echo "       ros2-graph   (or ros2_graph)"
+  echo ""
+  if [[ ":$PATH:" != *":$BIN_DIR:"* ]]; then
+    echo "NOTE: Add $BIN_DIR to your PATH:"
+    echo "  echo 'export PATH=\"$BIN_DIR:\$PATH\"' >> ~/.bashrc"
+    echo "  source ~/.bashrc"
+    echo ""
+  fi
+  echo "====================================="
+fi
