@@ -1,5 +1,20 @@
 # Releases & Planned Features
 
+## Planned Features 🚀
+
+### High Priority
+- [ ] Leveling of nodes and topics. Usually, when nodes are publishing some topics, those topics should be put below the nodes if the layout is top-bottom. If topics are input into or subscribed by a nodes, the nodes should be below the topics. Nodes that are publishing to topics that are subscribed by other nodes should be put above the topics, and then that topics should be above the nodes. 
+
+### Medium Priority
+- [ ] Service and action visualization
+- [ ] Connection bandwidth/frequency display
+
+### Low Priority
+- [ ] Performance optimization for large graphs (>100 nodes)
+- [ ] Custom node styling options
+- [ ] Graph history/timeline view
+- [ ] Integration tests
+
 ## Versions / Releases 📦
 
 ### v0.3.0 (Current)
@@ -30,18 +45,3 @@
 - Filtering features (hide debug nodes)
 - CMakeLists and package.xml configuration
 - Migration to uv for dependency management
-
-## Planned Features 🚀
-
-### High Priority
-- [ ] Leveling of nodes and topics. Usually, when nodes are publishing some topics, those topics should be put below the nodes if the layout is top-bottom. If topics are input into or subscribed by a nodes, the nodes should be below the topics. Nodes that are publishing to topics that are subscribed by other nodes should be put above the topics, and then that topics should be above the nodes. 
-
-### Medium Priority
-- [ ] Service and action visualization
-- [ ] Connection bandwidth/frequency display
-
-### Low Priority
-- [ ] Performance optimization for large graphs (>100 nodes)
-- [ ] Custom node styling options
-- [ ] Graph history/timeline view
-- [ ] Integration tests

@@ -363,6 +363,31 @@ function App() {
 
   // Handle highlighting when hovered, selected node, or search query changes
   useEffect(() => {
+    // Use selected node for persistent highlight, or hovered for preview
+    const highlightNodeId = selectedNodeId || hoveredNodeId;
+
+    if (highlightNodeId) {
+      setNodes(prevNodes => {
+        const decorated = decorateHighlight(prevNodes, edges, highlightNodeId);
+        return decorated.nodes.map(newNode => {
+          const existing = prevNodes.find(p => p.id === newNode.id);
+          if (!existing) return newNode;
+          if (existing.className === newNode.className) return existing;
+          return newNode;
+        });
+      });
+      setEdges(prevEdges => {
+        const decorated = decorateHighlight(nodes, prevEdges, highlightNodeId);
+        return decorated.edges.map(newEdge => {
+          const existing = prevEdges.find(e => e.id === newEdge.id);
+          if (!existing) return newEdge;
+          if (existing.className === newEdge.className && existing.animated === newEdge.animated) return existing;
+          return newEdge;
+        });
+      });
+      return;
+    }
+
     if (searchQuery) {
       const lowerQuery = searchQuery.toLowerCase();
       setNodes(prevNodes => prevNodes.map(n => {
@@ -379,27 +404,9 @@ function App() {
       return;
     }
 
-    // Use selected node for persistent highlight, or hovered for preview
-    const highlightNodeId = selectedNodeId || hoveredNodeId;
-    
-    setNodes(prevNodes => {
-      const decorated = decorateHighlight(prevNodes, edges, highlightNodeId);
-      return decorated.nodes.map(newNode => {
-        const existing = prevNodes.find(p => p.id === newNode.id);
-        if (!existing) return newNode;
-        if (existing.className === newNode.className) return existing;
-        return newNode;
-      });
-    });
-    setEdges(prevEdges => {
-      const decorated = decorateHighlight(nodes, prevEdges, highlightNodeId);
-      return decorated.edges.map(newEdge => {
-        const existing = prevEdges.find(e => e.id === newEdge.id);
-        if (!existing) return newEdge;
-        if (existing.className === newEdge.className && existing.animated === newEdge.animated) return existing;
-        return newEdge;
-      });
-    });
+    // If neither highlightNodeId nor searchQuery, reset to default
+    setNodes(prevNodes => prevNodes.map(n => n.className === '' ? n : { ...n, className: '' }));
+    setEdges(prevEdges => prevEdges.map(e => (e.className === '' && !e.animated) ? e : { ...e, className: '', animated: false }));
   }, [hoveredNodeId, selectedNodeId, searchQuery, decorateHighlight]);
 
   const loadGraph = useCallback(async ({ force = false } = {}) => {
