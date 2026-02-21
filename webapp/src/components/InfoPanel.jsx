@@ -38,6 +38,21 @@ const DockIcon = ({ side }) => {
   }
 };
 
+/** Compact QoS badge strip */
+const QosBadges = ({ qos }) => {
+  if (!qos) return null;
+  const rel = qos.reliability === 'BEST_EFFORT' ? 'BEST' : 'RELIABLE';
+  const dur = qos.durability === 'TRANSIENT_LOCAL' ? 'TRANSIENT' : 'VOLATILE';
+  const hist = qos.history === 'KEEP_ALL' ? 'KA' : `KL:${qos.depth}`;
+  return (
+    <span className="qos-badges">
+      <span className={`qos-badge qos-rel-${rel === 'BEST' ? 'be' : 'rel'}`}>{rel}</span>
+      <span className={`qos-badge qos-dur-${dur === 'TRANSIENT' ? 'tl' : 'vol'}`}>{dur}</span>
+      <span className="qos-badge qos-hist">{hist}</span>
+    </span>
+  );
+};
+
 const InfoPanel = ({ nodeInfo, onClose, pcRenderer = 'threejs' }) => {
   // --- topic message state ---
   const [latestMessage, setLatestMessage] = useState(null);
@@ -353,9 +368,16 @@ const InfoPanel = ({ nodeInfo, onClose, pcRenderer = 'threejs' }) => {
                   <label>Publishers ({nodeInfo.publishers?.length || 0}):</label>
                   <div className="info-list">
                     {nodeInfo.publishers?.length > 0 ? (
-                      nodeInfo.publishers.map((topic, idx) => (
-                        <div key={idx} className="info-list-item">📡 {topic}</div>
-                      ))
+                      nodeInfo.publishers.map((item, idx) => {
+                        const name = typeof item === 'string' ? item : item.name;
+                        const qos = typeof item === 'string' ? null : item.qos;
+                        return (
+                          <div key={idx} className="info-list-item">
+                            <span>📡 {name}</span>
+                            <QosBadges qos={qos} />
+                          </div>
+                        );
+                      })
                     ) : (
                       <div className="info-empty">No publishers</div>
                     )}
@@ -365,9 +387,16 @@ const InfoPanel = ({ nodeInfo, onClose, pcRenderer = 'threejs' }) => {
                   <label>Subscribers ({nodeInfo.subscribers?.length || 0}):</label>
                   <div className="info-list">
                     {nodeInfo.subscribers?.length > 0 ? (
-                      nodeInfo.subscribers.map((topic, idx) => (
-                        <div key={idx} className="info-list-item">📡 {topic}</div>
-                      ))
+                      nodeInfo.subscribers.map((item, idx) => {
+                        const name = typeof item === 'string' ? item : item.name;
+                        const qos = typeof item === 'string' ? null : item.qos;
+                        return (
+                          <div key={idx} className="info-list-item">
+                            <span>📡 {name}</span>
+                            <QosBadges qos={qos} />
+                          </div>
+                        );
+                      })
                     ) : (
                       <div className="info-empty">No subscribers</div>
                     )}
@@ -394,9 +423,16 @@ const InfoPanel = ({ nodeInfo, onClose, pcRenderer = 'threejs' }) => {
                   <label>Publishers ({nodeInfo.publishers?.length || 0}):</label>
                   <div className="info-list">
                     {nodeInfo.publishers?.length > 0 ? (
-                      nodeInfo.publishers.map((node, idx) => (
-                        <div key={idx} className="info-list-item">📦 {node}</div>
-                      ))
+                      nodeInfo.publishers.map((item, idx) => {
+                        const name = typeof item === 'string' ? item : item.name;
+                        const qos = typeof item === 'string' ? null : item.qos;
+                        return (
+                          <div key={idx} className="info-list-item">
+                            <span>📦 {name}</span>
+                            <QosBadges qos={qos} />
+                          </div>
+                        );
+                      })
                     ) : (
                       <div className="info-empty">No publishers</div>
                     )}
@@ -406,9 +442,16 @@ const InfoPanel = ({ nodeInfo, onClose, pcRenderer = 'threejs' }) => {
                   <label>Subscribers ({nodeInfo.subscribers?.length || 0}):</label>
                   <div className="info-list">
                     {nodeInfo.subscribers?.length > 0 ? (
-                      nodeInfo.subscribers.map((node, idx) => (
-                        <div key={idx} className="info-list-item">📦 {node}</div>
-                      ))
+                      nodeInfo.subscribers.map((item, idx) => {
+                        const name = typeof item === 'string' ? item : item.name;
+                        const qos = typeof item === 'string' ? null : item.qos;
+                        return (
+                          <div key={idx} className="info-list-item">
+                            <span>📦 {name}</span>
+                            <QosBadges qos={qos} />
+                          </div>
+                        );
+                      })
                     ) : (
                       <div className="info-empty">No subscribers</div>
                     )}
@@ -443,6 +486,7 @@ const InfoPanel = ({ nodeInfo, onClose, pcRenderer = 'threejs' }) => {
                 ) : latestMessage.data?._msg_type === 'pointcloud2' ? (
                   <div className="message-console-section pointcloud-section">
                     <PointCloudViewer
+                      key={nodeInfo.name}
                       renderer={pcRenderer}
                       data={latestMessage.data}
                     />
@@ -453,6 +497,19 @@ const InfoPanel = ({ nodeInfo, onClose, pcRenderer = 'threejs' }) => {
                       {latestMessage.data.fields?.map((f, i) => (
                         <span key={i} className="pointcloud-field">{f.name}</span>
                       ))}
+                    </div>
+                  </div>
+                ) : latestMessage.data?._msg_type === 'laserscan' ? (
+                  <div className="message-console-section pointcloud-section">
+                    <PointCloudViewer
+                      key={nodeInfo.name}
+                      renderer={pcRenderer}
+                      data={latestMessage.data}
+                    />
+                    <div className="pointcloud-meta">
+                      <span>LaserScan</span>
+                      <span>range: [{latestMessage.data.range_min?.toFixed(2)}, {latestMessage.data.range_max?.toFixed(2)}] m</span>
+                      <span>angle: [{(latestMessage.data.angle_min * 180 / Math.PI)?.toFixed(1)}°, {(latestMessage.data.angle_max * 180 / Math.PI)?.toFixed(1)}°]</span>
                     </div>
                   </div>
                 ) : latestMessage.data?._msg_type === 'image_metadata' ? (

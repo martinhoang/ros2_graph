@@ -26,13 +26,15 @@
 ## Planned Features 🚀
 
 ### High Priority
-- [ ] Service and action visualization
+- [x] Search function to highlight nodes/topics by name or substrings in name
+- [x] Graph export (PNG, SVG, JSON)
+- [x] PointCloud2 and LaserScan 3D rendering
+- [x] QoS badges for publishers/subscribers
+- [x] Hardware acceleration for PointCloud viewer (Three.js, Regl, DeckGL)
+- [ ] Leveling of nodes and topics. Usually, when nodes are publishing some topics, those topics should be put below the nodes if the layout is top-bottom. If topics are input into or subscribed by a nodes, the nodes should be below the topics. Nodes that are publishing to topics that are subscribed by other nodes should be put above the topics, and then that topics should be above the nodes. 
 
 ### Medium Priority
 - [ ] Service and action visualization
-- [ ] Graph export (PNG, SVG, JSON)
-- [ ] Node/topic filtering by namespace
-- [ ] Search functionality
 - [ ] Connection bandwidth/frequency display
 
 ### Low Priority

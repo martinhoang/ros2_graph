@@ -5,6 +5,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 const ThreePointCloud = ({ positions, colors, numPoints, bounds }) => {
   const containerRef = useRef(null);
   const stateRef = useRef(null);
+  const cameraInitializedRef = useRef(false);
 
   // Setup scene once
   useEffect(() => {
@@ -19,9 +20,13 @@ const ThreePointCloud = ({ positions, colors, numPoints, bounds }) => {
     );
     camera.position.set(2, 2, 2);
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    // Request discrete GPU; antialias handled in shader via round-disc discard
+    const renderer = new THREE.WebGLRenderer({
+      antialias: false,
+      powerPreference: 'high-performance',
+    });
     renderer.setSize(container.clientWidth, container.clientHeight);
-    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     container.appendChild(renderer.domElement);
 
     const controls = new OrbitControls(camera, renderer.domElement);
@@ -88,11 +93,8 @@ const ThreePointCloud = ({ positions, colors, numPoints, bounds }) => {
     geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
 
     if (colors && colors.length >= numPoints * 3) {
-      const colorFloat = new Float32Array(numPoints * 3);
-      for (let i = 0; i < numPoints * 3; i++) {
-        colorFloat[i] = colors[i] / 255;
-      }
-      geometry.setAttribute('color', new THREE.Float32BufferAttribute(colorFloat, 3));
+      // Upload Uint8 directly with normalized=true — GPU divides by 255, no CPU loop needed
+      geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3, true));
     }
 
     const material = new THREE.PointsMaterial({
@@ -105,8 +107,8 @@ const ThreePointCloud = ({ positions, colors, numPoints, bounds }) => {
     points.name = 'pcPoints';
     state.scene.add(points);
 
-    // Fit camera to bounds
-    if (bounds) {
+    // Fit camera to bounds only on first load
+    if (bounds && !cameraInitializedRef.current) {
       const center = new THREE.Vector3(
         (bounds.min[0] + bounds.max[0]) / 2,
         (bounds.min[1] + bounds.max[1]) / 2,
@@ -127,6 +129,7 @@ const ThreePointCloud = ({ positions, colors, numPoints, bounds }) => {
       state.camera.near = maxDim * 0.001;
       state.camera.far = maxDim * 100;
       state.camera.updateProjectionMatrix();
+      cameraInitializedRef.current = true;
     }
   }, [positions, colors, numPoints, bounds]);
 

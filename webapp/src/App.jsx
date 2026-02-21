@@ -27,6 +27,7 @@ const nodeTypes = {
 function App() {
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
+  const edgesRef = useRef([]); // Stable ref so getRelatedIds doesn't cause cascade
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [autoRefresh, setAutoRefresh] = useState(true); // Enable polling by default
@@ -37,6 +38,7 @@ function App() {
   const [selectedNodeId, setSelectedNodeId] = useState(null); // Persists until click elsewhere
   const [selectedNodeInfo, setSelectedNodeInfo] = useState(null);
   const [isSelecting, setIsSelecting] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const [pcRenderer, setPcRenderer] = useState(() => {
     try { return localStorage.getItem('ros2_graph_pc_renderer') || 'threejs'; } catch { return 'threejs'; }
   });
@@ -57,6 +59,7 @@ function App() {
   const lastGraphDataRef = useRef(null); // Last raw graph payload from backend
   const resetInProgressRef = useRef(false); // Prevent overlapping reset operations
   const resetRecoveryTimerRef = useRef(null); // Background retry timer after reset
+  const reactFlowWrapperRef = useRef(null); // Ref for PNG/SVG export
 
   // Persist pointcloud renderer choice
   useEffect(() => {
@@ -110,6 +113,10 @@ function App() {
 
   // Keep refs in sync with state
   useEffect(() => {
+    edgesRef.current = edges;
+  }, [edges]);
+
+  useEffect(() => {
     hoveredNodeIdRef.current = hoveredNodeId;
   }, [hoveredNodeId]);
 
@@ -152,11 +159,13 @@ function App() {
     [setEdges],
   );
 
-  // Get related edge and node IDs for highlighting
+  // Get related edge and node IDs for highlighting.
+  // Uses edgesRef (not edges state) so this callback stays stable and does NOT
+  // propagate through decorateHighlight → applyGraphData → loadGraph on every edge update.
   const getRelatedIds = useCallback((nodeId) => {
     if (!nodeId) return { nodes: [], edges: [] };
     
-    const relatedEdges = edges.filter(
+    const relatedEdges = edgesRef.current.filter(
       e => e.source === nodeId || e.target === nodeId
     );
     const relatedNodes = new Set([nodeId]);
@@ -169,7 +178,7 @@ function App() {
       nodes: Array.from(relatedNodes),
       edges: relatedEdges.map(e => e.id)
     };
-  }, [edges]);
+  }, []); // No deps — reads live data via edgesRef
 
   // Pure highlight decoration without triggering two-stage state updates
   // Use selectedNodeId for persistent highlight, fall back to hoveredNodeId for hover preview
@@ -212,6 +221,9 @@ function App() {
     
     // Set selected node for persistent highlight
     setSelectedNodeId(nodeId);
+    
+    // Clear search query when a node is clicked
+    setSearchQuery('');
     
     // Fetch and show details immediately on click
     fetchNodeDetails(nodeId);
@@ -349,8 +361,24 @@ function App() {
     }
   }, [decorateHighlight, hideDebugNodes, hoveredNodeIdRef]);
 
-  // Handle highlighting when hovered or selected node changes
+  // Handle highlighting when hovered, selected node, or search query changes
   useEffect(() => {
+    if (searchQuery) {
+      const lowerQuery = searchQuery.toLowerCase();
+      setNodes(prevNodes => prevNodes.map(n => {
+        const label = (n.data?.label || n.id || '').toLowerCase();
+        const matches = label.includes(lowerQuery);
+        const nextClass = matches ? 'highlighted' : 'dimmed';
+        if (n.className === nextClass) return n;
+        return { ...n, className: nextClass };
+      }));
+      setEdges(prevEdges => prevEdges.map(e => {
+        if (e.className === 'dimmed' && !e.animated) return e;
+        return { ...e, className: 'dimmed', animated: false };
+      }));
+      return;
+    }
+
     // Use selected node for persistent highlight, or hovered for preview
     const highlightNodeId = selectedNodeId || hoveredNodeId;
     
@@ -372,7 +400,7 @@ function App() {
         return newEdge;
       });
     });
-  }, [hoveredNodeId, selectedNodeId, decorateHighlight]);
+  }, [hoveredNodeId, selectedNodeId, searchQuery, decorateHighlight]);
 
   const loadGraph = useCallback(async ({ force = false } = {}) => {
     // Avoid overlapping fetches which cause multiple quick state flips
@@ -607,6 +635,50 @@ function App() {
     }
   };
 
+  const handleExport = useCallback(async (format) => {
+    if (format === 'json') {
+      const data = lastGraphDataRef.current;
+      if (!data) return;
+      const exportData = {
+        nodes: nodes.map(n => ({ id: n.id, type: n.type, label: n.data?.label, position: n.position })),
+        edges: edges.map(e => ({ id: e.id, source: e.source, target: e.target })),
+        raw: data,
+      };
+      const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'ros2_graph.json';
+      a.click();
+      URL.revokeObjectURL(url);
+      return;
+    }
+
+    const element = reactFlowWrapperRef.current?.querySelector('.react-flow');
+    if (!element) return;
+
+    try {
+      const bgColor = darkMode ? '#1e1e1e' : '#ffffff';
+      if (format === 'png') {
+        const { toPng } = await import('html-to-image');
+        const dataUrl = await toPng(element, { backgroundColor: bgColor, pixelRatio: 2 });
+        const a = document.createElement('a');
+        a.href = dataUrl;
+        a.download = 'ros2_graph.png';
+        a.click();
+      } else if (format === 'svg') {
+        const { toSvg } = await import('html-to-image');
+        const dataUrl = await toSvg(element, { backgroundColor: bgColor });
+        const a = document.createElement('a');
+        a.href = dataUrl;
+        a.download = 'ros2_graph.svg';
+        a.click();
+      }
+    } catch (err) {
+      console.error('Export failed:', err);
+    }
+  }, [darkMode, nodes, edges]);
+
   const handleFitView = useCallback(() => {
     try {
       fitView({ padding: 0.2, duration: 400, includeHiddenNodes: false });
@@ -623,6 +695,14 @@ function App() {
     setIsSelecting(false);
   }, []);
 
+  const handleSearch = useCallback((query, isFocus = false) => {
+    setSearchQuery(query);
+    if (query || isFocus) {
+      setSelectedNodeId(null);
+      setSelectedNodeInfo(null);
+    }
+  }, []);
+
   return (
     <div className={`app ${darkMode ? 'dark-mode' : ''}`}>
       <Toolbar
@@ -633,6 +713,7 @@ function App() {
         onToggleGrid={handleToggleGrid}
         onResetLayout={handleResetLayout}
         onFitView={handleFitView}
+        onExport={handleExport}
         autoRefresh={autoRefresh}
         hideDebugNodes={hideDebugNodes}
         darkMode={darkMode}
@@ -640,6 +721,8 @@ function App() {
         loading={loading}
         wsConnected={wsClientRef.current?.isConnected() || false}
         widgets={toolbarWidgets}
+        searchQuery={searchQuery}
+        onSearch={handleSearch}
       />
       {error && (
         <div className="error-banner">
@@ -651,7 +734,7 @@ function App() {
         onClose={handleCloseInfoPanel}
         pcRenderer={pcRenderer}
       />
-        <div className="reactflow-wrapper">
+        <div className="reactflow-wrapper" ref={reactFlowWrapperRef}>
           <ReactFlow
             nodes={nodes}
             edges={edges}

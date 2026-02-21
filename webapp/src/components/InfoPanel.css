@@ -181,7 +181,7 @@
 .info-list { display: flex; flex-direction: column; gap: 4px; }
 
 .info-list-item {
-  padding: 6px 10px;
+  padding: 4px 10px;
   background: #f5f5f5;
   border-radius: 4px;
   font-size: 12px;
@@ -189,10 +189,42 @@
   word-break: break-all;
   overflow-wrap: break-word;
   transition: background 0.12s;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
 }
 .info-list-item:hover { background: #e8e8e8; }
 .dark-mode .info-list-item { background: #1a1a1a; color: #ddd; }
 .dark-mode .info-list-item:hover { background: #333; }
+
+/* QoS badges */
+.qos-badges {
+  display: flex;
+  gap: 3px;
+  flex-shrink: 0;
+}
+.qos-badge {
+  font-size: 10px;
+  font-family: monospace;
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: #e0e0e0;
+  color: #555;
+  white-space: nowrap;
+}
+.qos-rel-rel { background: #c8e6c9; color: #2e7d32; }
+.qos-rel-be  { background: #ffe0b2; color: #bf360c; }
+.qos-dur-tl  { background: #bbdefb; color: #0d47a1; }
+.qos-dur-vol { background: #eeeeee; color: #666; }
+.qos-hist    { background: #ede7f6; color: #4527a0; }
+
+.dark-mode .qos-badge     { background: #333; color: #aaa; }
+.dark-mode .qos-rel-rel   { background: #1b5e20; color: #a5d6a7; }
+.dark-mode .qos-rel-be    { background: #bf360c; color: #ffccbc; }
+.dark-mode .qos-dur-tl    { background: #0d47a1; color: #90caf9; }
+.dark-mode .qos-dur-vol   { background: #2a2a2a; color: #888; }
+.dark-mode .qos-hist      { background: #311b92; color: #ce93d8; }
 
 .info-empty {
   padding: 6px 10px;

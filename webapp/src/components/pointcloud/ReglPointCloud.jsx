@@ -64,6 +64,7 @@ void main() {
 const ReglPointCloud = ({ positions, colors, numPoints, bounds }) => {
   const canvasRef = useRef(null);
   const stateRef = useRef(null);
+  const cameraInitializedRef = useRef(false);
 
   // Orbit camera state (spherical coordinates)
   const cameraRef = useRef({
@@ -88,7 +89,7 @@ const ReglPointCloud = ({ positions, colors, numPoints, bounds }) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    const regl = createREGL({ canvas, extensions: [], attributes: { antialias: true } });
+    const regl = createREGL({ canvas, extensions: [], attributes: { antialias: false, powerPreference: 'high-performance' } });
     stateRef.current = { regl, drawCmd: null, posBuffer: null, colBuffer: null };
 
     // Animation loop
@@ -225,8 +226,8 @@ const ReglPointCloud = ({ positions, colors, numPoints, bounds }) => {
       depth: { enable: true },
     });
 
-    // Fit camera to bounds
-    if (bounds) {
+    // Fit camera to bounds only on first load
+    if (bounds && !cameraInitializedRef.current) {
       const cam = cameraRef.current;
       cam.target = [
         (bounds.min[0] + bounds.max[0]) / 2,
@@ -237,6 +238,7 @@ const ReglPointCloud = ({ positions, colors, numPoints, bounds }) => {
       const dy = bounds.max[1] - bounds.min[1];
       const dz = bounds.max[2] - bounds.min[2];
       cam.distance = Math.max(dx, dy, dz, 0.1) * 1.5;
+      cameraInitializedRef.current = true;
     }
   }, [positions, colors, numPoints, bounds]);
 

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import SearchableDropdown from './widgets/SearchableDropdown';
 import './Toolbar.css';
 
@@ -35,6 +35,7 @@ const Toolbar = ({
   onToggleGrid,
   onResetLayout,
   onFitView,
+  onExport,
   autoRefresh,
   hideDebugNodes,
   darkMode,
@@ -42,7 +43,21 @@ const Toolbar = ({
   loading,
   wsConnected,
   widgets,
+  searchQuery,
+  onSearch,
 }) => {
+  const [showExportMenu, setShowExportMenu] = useState(false);
+  const exportWrapperRef = useRef(null);
+
+  useEffect(() => {
+    if (!showExportMenu) return;
+    const handleClick = (e) => {
+      if (!exportWrapperRef.current?.contains(e.target)) setShowExportMenu(false);
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [showExportMenu]);
+
   return (
     <div className={`toolbar ${darkMode ? 'dark-mode' : ''}`}>
       <div className="toolbar-section">
@@ -106,6 +121,48 @@ const Toolbar = ({
         >
           🔍 Fit
         </button>
+
+        <div className="toolbar-export-wrapper" ref={exportWrapperRef}>
+          <button
+            className="toolbar-button"
+            onClick={() => setShowExportMenu(v => !v)}
+            title="Export graph"
+          >
+            💾 Export
+          </button>
+          {showExportMenu && (
+            <div className={`export-menu ${darkMode ? 'dark-mode' : ''}`}>
+              {['PNG', 'SVG', 'JSON'].map(fmt => (
+                <button
+                  key={fmt}
+                  className="export-menu-item"
+                  onClick={() => { onExport(fmt.toLowerCase()); setShowExportMenu(false); }}
+                >
+                  {fmt === 'PNG' ? '🖼️' : fmt === 'SVG' ? '📐' : '📄'} {fmt}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Search bar */}
+      <div className="toolbar-section toolbar-search">
+        <input
+          className={`toolbar-search-input ${darkMode ? 'dark-mode' : ''}`}
+          type="text"
+          placeholder="🔎 Search nodes/topics…"
+          value={searchQuery || ''}
+          onChange={e => onSearch(e.target.value, true)}
+          onFocus={() => onSearch(searchQuery || '', true)}
+        />
+        {searchQuery && (
+          <button
+            className="toolbar-button search-clear-btn"
+            onClick={() => onSearch('', true)}
+            title="Clear search"
+          >✕</button>
+        )}
       </div>
 
       {/* Extensible widgets section */}

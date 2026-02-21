@@ -27,18 +27,59 @@ function base64ToBuffer(b64) {
 }
 
 const PointCloudViewer = ({ renderer = 'threejs', data }) => {
-  // Decode base64 point data into typed arrays
+  // Decode base64 point data into typed arrays, applying ROS2→Three.js
+  // coordinate transform:
+  //   ROS X (forward) → Three -Z  (depth into scene)
+  //   ROS Y (left)    → Three -X  (right-hand rule)
+  //   ROS Z (up)      → Three +Y  (up)
   const decoded = useMemo(() => {
     if (!data?.positions || !data?.num_points) {
       return { positions: null, colors: null, numPoints: 0, bounds: null };
     }
-    const posBuf = base64ToBuffer(data.positions);
-    const colBuf = base64ToBuffer(data.colors);
+    
+    const isOptical = data.header?.frame_id?.includes('optical');
+    
+    const raw = new Float32Array(base64ToBuffer(data.positions));
+    const n = data.num_points;
+    const positions = new Float32Array(n * 3);
+    
+    for (let i = 0; i < n; i++) {
+      if (isOptical) {
+        // Optical frame: Z forward, X right, Y down
+        // Three.js: Z backward, X right, Y up
+        positions[i * 3]     =  raw[i * 3];     // Three X =  ROS X
+        positions[i * 3 + 1] = -raw[i * 3 + 1]; // Three Y = -ROS Y
+        positions[i * 3 + 2] = -raw[i * 3 + 2]; // Three Z = -ROS Z
+      } else {
+        // Standard ROS frame: X forward, Y left, Z up
+        // Three.js: Z backward, X right, Y up
+        positions[i * 3]     = -raw[i * 3 + 1]; // Three X = -ROS Y
+        positions[i * 3 + 1] =  raw[i * 3 + 2]; // Three Y =  ROS Z
+        positions[i * 3 + 2] = -raw[i * 3];     // Three Z = -ROS X
+      }
+    }
+    
+    // Transform bounds into the same space
+    let bounds = null;
+    if (data.bounds) {
+      const { min: mn, max: mx } = data.bounds;
+      if (isOptical) {
+        bounds = {
+          min: [ mn[0], -mx[1], -mx[2] ],
+          max: [ mx[0], -mn[1], -mn[2] ],
+        };
+      } else {
+        bounds = {
+          min: [ -mx[1], mn[2], -mx[0] ],
+          max: [ -mn[1], mx[2], -mn[0] ],
+        };
+      }
+    }
     return {
-      positions: new Float32Array(posBuf),
-      colors: new Uint8Array(colBuf),
-      numPoints: data.num_points,
-      bounds: data.bounds,
+      positions,
+      colors: new Uint8Array(base64ToBuffer(data.colors)),
+      numPoints: n,
+      bounds,
     };
   }, [data?.positions, data?.colors, data?.num_points]);
 

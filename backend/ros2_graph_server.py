@@ -291,7 +291,23 @@ class ROS2GraphService(Node):
             if pc_data:
                 result.update(pc_data)
             return result
-        
+            
+        # Special handling for LaserScan - convert to pointcloud format for 3D rendering
+        if msg_class_name == 'LaserScan':
+            result = {
+                '_msg_type': 'laserscan',
+                'header': self._message_to_dict(msg.header) if hasattr(msg, 'header') else {},
+                'angle_min': msg.angle_min,
+                'angle_max': msg.angle_max,
+                'angle_increment': msg.angle_increment,
+                'range_min': msg.range_min,
+                'range_max': msg.range_max,
+            }
+            pc_data = self._extract_laserscan_data(msg)
+            if pc_data:
+                result.update(pc_data)
+            return result
+
         # Generic message handling
         result = {}
         for field_name in msg.get_fields_and_field_types().keys():
@@ -345,6 +361,77 @@ class ROS2GraphService(Node):
             pass
         # Fallback
         return str(value)
+
+    def _extract_laserscan_data(self, msg, max_points=150000):
+        """Convert LaserScan to XYZ positions and colors for 3D rendering."""
+        try:
+            import numpy as np
+            
+            ranges = np.array(msg.ranges, dtype=np.float32)
+            intensities = np.array(msg.intensities, dtype=np.float32) if msg.intensities else None
+            
+            # Calculate angles
+            angles = msg.angle_min + np.arange(len(msg.ranges), dtype=np.float32) * msg.angle_increment
+            
+            # Filter out invalid ranges
+            valid_mask = np.isfinite(ranges) & (ranges >= msg.range_min) & (ranges <= msg.range_max)
+            ranges = ranges[valid_mask]
+            angles = angles[valid_mask]
+            
+            if len(ranges) == 0:
+                return None
+                
+            # Convert polar to Cartesian
+            x = ranges * np.cos(angles)
+            y = ranges * np.sin(angles)
+            z = np.zeros_like(x)
+            
+            positions = np.column_stack((x, y, z))
+            num_points = len(positions)
+            
+            # Colors based on intensity or range
+            if intensities is not None and len(intensities) == len(msg.ranges):
+                intensities = intensities[valid_mask]
+                i_min, i_max = float(intensities.min()), float(intensities.max())
+                if i_max > i_min:
+                    norm = np.clip((intensities - i_min) / (i_max - i_min) * 255, 0, 255).astype(np.uint8)
+                else:
+                    norm = np.full(num_points, 128, dtype=np.uint8)
+            else:
+                # Color by range
+                r_min, r_max = float(ranges.min()), float(ranges.max())
+                if r_max > r_min:
+                    norm = np.clip((ranges - r_min) / (r_max - r_min) * 255, 0, 255).astype(np.uint8)
+                else:
+                    norm = np.full(num_points, 128, dtype=np.uint8)
+                    
+            try:
+                import cv2
+                colored = cv2.applyColorMap(norm.reshape(-1, 1), cv2.COLORMAP_TURBO).reshape(-1, 3)
+                colors = colored[:, ::-1].copy()  # BGR -> RGB
+            except ImportError:
+                colors = np.column_stack([norm, 255 - norm, np.full(num_points, 128, dtype=np.uint8)])
+                
+            # Downsample if too many points
+            if num_points > max_points:
+                indices = np.random.choice(num_points, max_points, replace=False)
+                positions = positions[indices]
+                colors = colors[indices]
+                num_points = max_points
+
+            # Compute bounds for camera setup
+            bounds_min = positions.min(axis=0).tolist()
+            bounds_max = positions.max(axis=0).tolist()
+
+            return {
+                'positions': base64.b64encode(positions.astype(np.float32).tobytes()).decode('utf-8'),
+                'colors': base64.b64encode(colors.astype(np.uint8).tobytes()).decode('utf-8'),
+                'num_points': int(num_points),
+                'bounds': {'min': bounds_min, 'max': bounds_max},
+            }
+        except Exception as e:
+            self.get_logger().warn(f'LaserScan data extraction failed: {e}')
+            return None
 
     def _extract_pointcloud_data(self, msg, max_points=150000):
         """Extract XYZ positions and RGB colors from a PointCloud2 message for 3D rendering."""
@@ -674,6 +761,18 @@ class ROS2GraphService(Node):
             self.get_logger().error(f'Error getting graph data: {str(e)}')
             raise
 
+    def _qos_to_dict(self, qos_profile):
+        """Convert a QoS profile to a compact serialisable dict"""
+        try:
+            return {
+                'reliability': qos_profile.reliability.name,
+                'durability': qos_profile.durability.name,
+                'history': qos_profile.history.name,
+                'depth': qos_profile.depth,
+            }
+        except Exception:
+            return None
+
     def get_node_details(self, node_name):
         """Get detailed information about a specific node"""
         try:
@@ -694,13 +793,19 @@ class ROS2GraphService(Node):
                         for pub in pubs:
                             pub_full_name = f"{pub.node_namespace}{pub.node_name}".replace('//', '/')
                             if pub_full_name == node_name:
-                                publishers.append(topic_name)
+                                publishers.append({
+                                    'name': topic_name,
+                                    'qos': self._qos_to_dict(pub.qos_profile),
+                                })
                         
                         subs = self.get_subscriptions_info_by_topic(topic_name)
                         for sub in subs:
                             sub_full_name = f"{sub.node_namespace}{sub.node_name}".replace('//', '/')
                             if sub_full_name == node_name:
-                                subscribers.append(topic_name)
+                                subscribers.append({
+                                    'name': topic_name,
+                                    'qos': self._qos_to_dict(sub.qos_profile),
+                                })
                     
                     return {
                         'name': full_name,
@@ -726,12 +831,18 @@ class ROS2GraphService(Node):
                     subscribers = self.get_subscriptions_info_by_topic(topic_name)
                     
                     pub_nodes = [
-                        f"{pub.node_namespace}{pub.node_name}".replace('//', '/')
+                        {
+                            'name': f"{pub.node_namespace}{pub.node_name}".replace('//', '/'),
+                            'qos': self._qos_to_dict(pub.qos_profile),
+                        }
                         for pub in publishers
                     ]
                     
                     sub_nodes = [
-                        f"{sub.node_namespace}{sub.node_name}".replace('//', '/')
+                        {
+                            'name': f"{sub.node_namespace}{sub.node_name}".replace('//', '/'),
+                            'qos': self._qos_to_dict(sub.qos_profile),
+                        }
                         for sub in subscribers
                     ]
                     

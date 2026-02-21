@@ -5,6 +5,7 @@ import { PointCloudLayer } from '@deck.gl/layers';
 const DeckGLPointCloud = ({ positions, colors, numPoints, bounds }) => {
   const containerRef = useRef(null);
   const deckRef = useRef(null);
+  const cameraInitializedRef = useRef(false);
 
   // Initialize Deck instance
   useEffect(() => {
@@ -85,8 +86,8 @@ const DeckGLPointCloud = ({ positions, colors, numPoints, bounds }) => {
       coordinateSystem: 0, // CARTESIAN
     });
 
-    // Fit view to bounds
-    if (bounds) {
+    // Fit view to bounds only on first load
+    if (bounds && !cameraInitializedRef.current) {
       const target = [
         (bounds.min[0] + bounds.max[0]) / 2,
         (bounds.min[1] + bounds.max[1]) / 2,
@@ -110,6 +111,7 @@ const DeckGLPointCloud = ({ positions, colors, numPoints, bounds }) => {
         },
         layers: [layer],
       });
+      cameraInitializedRef.current = true;
     } else {
       deck.setProps({ layers: [layer] });
     }
