@@ -47,6 +47,7 @@ function App() {
   const useWebSocketRef = useRef(false); // Disabled by default - use polling instead
   const hoveredNodeIdRef = useRef(null);
   const selectedNodeIdRef = useRef(null); // Track selected node for persistent highlight
+  const searchQueryRef = useRef(''); // Track search query for highlight preservation across polls
   const userMovedNodesRef = useRef(new Map()); // Track user-adjusted node positions
   const initialLoadRef = useRef(true);
   const isDraggingRef = useRef(false); // Track active drag to pause refreshes
@@ -123,6 +124,10 @@ function App() {
   useEffect(() => {
     selectedNodeIdRef.current = selectedNodeId;
   }, [selectedNodeId]);
+
+  useEffect(() => {
+    searchQueryRef.current = searchQuery;
+  }, [searchQuery]);
 
   // Custom onNodesChange that tracks user movements
   const handleNodesChange = useCallback((changes) => {
@@ -308,7 +313,20 @@ function App() {
 
     // Use selected node for highlight if available, otherwise use hovered node
     const highlightNodeId = selectedNodeIdRef.current || hoveredNodeIdRef.current;
-    const highlighted = decorateHighlight(preparedNodes, layoutedEdges, highlightNodeId);
+    let highlighted;
+    if (!highlightNodeId && searchQueryRef.current) {
+      // Preserve active search highlighting so polls don't wipe it out
+      const lowerQuery = searchQueryRef.current.toLowerCase();
+      highlighted = {
+        nodes: preparedNodes.map(n => {
+          const label = (n.data?.label || n.id || '').toLowerCase();
+          return { ...n, className: label.includes(lowerQuery) ? 'highlighted' : 'dimmed' };
+        }),
+        edges: layoutedEdges.map(e => ({ ...e, className: 'dimmed', animated: false })),
+      };
+    } else {
+      highlighted = decorateHighlight(preparedNodes, layoutedEdges, highlightNodeId);
+    }
 
     setNodes(prev => {
       // If forcing reset, bypass comparison and use all new positions

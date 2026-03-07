@@ -164,23 +164,83 @@ export const layoutGraph = (nodes, edges, hideDebugNodes = true) => {
     rows.set(levelRemap.get(lv), nodesInLevel);
   });
 
-  // ─── Phase 6: Within-row sorting by connectivity (degree) ─────────────────
+  // ─── Phase 6: Barycenter-based within-row ordering ────────────────────────
   //
-  // "Broadcast" nodes that connect to many peers (e.g. /clock) are sorted
-  // first within their row → they end up in the centre of the row, making
-  // them visually prominent and easy to spot.
+  // Uses the Sugiyama-style barycenter heuristic:
+  //   • Top-down pass: sort each row so that each node is placed at the
+  //     average column position of its *parents* in the row above.
+  //   • Bottom-up pass: re-sort each row toward the average position of its
+  //     *children* in the row below.
+  //   • Several cycles are run to converge toward minimal edge crossings.
+  //
+  // This ensures that a publisher node ends up directly above (or very near)
+  // its topic nodes, and subscriber nodes sit directly below their topics.
+
+  // Degree for initial tiebreaking (high-degree = broadcast nodes go centre)
   const degree = new Map(filteredNodes.map((n) => [n.id, 0]));
   filteredEdges.forEach((e) => {
     if (nodeById.has(e.source)) degree.set(e.source, (degree.get(e.source) ?? 0) + 1);
     if (nodeById.has(e.target)) degree.set(e.target, (degree.get(e.target) ?? 0) + 1);
   });
 
-  const sortRowNodes = (items) =>
+  const sortByDegree = (items) =>
     [...items].sort((a, b) => {
       const diff = (degree.get(b.id) ?? 0) - (degree.get(a.id) ?? 0);
-      if (diff !== 0) return diff; // higher degree first
+      if (diff !== 0) return diff;
       return (a.data?.label || a.id).localeCompare(b.data?.label || b.id);
     });
+
+  // Build parent / child maps (back edges excluded so cycles don't interfere)
+  const parentsOf = new Map(filteredNodes.map((n) => [n.id, []]));
+  const childrenOf = new Map(filteredNodes.map((n) => [n.id, []]));
+  filteredEdges.forEach((e) => {
+    if (!nodeById.has(e.source) || !nodeById.has(e.target)) return;
+    if (backEdges.has(`${e.source}||${e.target}`)) return;
+    parentsOf.get(e.target).push(e.source);
+    childrenOf.get(e.source).push(e.target);
+  });
+
+  // Initial row order: degree-descending (stable baseline)
+  const sortedRowIdxs = Array.from(rows.keys()).sort((a, b) => a - b);
+  const rowOrder = new Map();
+  sortedRowIdxs.forEach((ri) => {
+    rowOrder.set(ri, sortByDegree(rows.get(ri)).map((n) => n.id));
+  });
+
+  // tempX: fractional column index within each row used for barycenter calc
+  const tempX = new Map();
+  const refreshTempX = (ri) =>
+    rowOrder.get(ri).forEach((id, i) => tempX.set(id, i));
+  sortedRowIdxs.forEach(refreshTempX);
+
+  // Barycenter helper
+  const bary = (id, neighborsFn) => {
+    const nbrs = neighborsFn(id);
+    const xs = nbrs.map((nid) => tempX.get(nid)).filter((x) => x !== undefined);
+    return xs.length > 0 ? xs.reduce((a, b) => a + b, 0) / xs.length : tempX.get(id) ?? 0;
+  };
+
+  // 3 full top-down + bottom-up cycles
+  for (let pass = 0; pass < 3; pass++) {
+    // Top-down: pull each node toward its parents
+    for (let ri = 1; ri < sortedRowIdxs.length; ri++) {
+      const rowIdx = sortedRowIdxs[ri];
+      rowOrder.get(rowIdx).sort(
+        (a, b) => bary(a, (id) => parentsOf.get(id) ?? []) -
+                  bary(b, (id) => parentsOf.get(id) ?? [])
+      );
+      refreshTempX(rowIdx);
+    }
+    // Bottom-up: pull each node toward its children
+    for (let ri = sortedRowIdxs.length - 2; ri >= 0; ri--) {
+      const rowIdx = sortedRowIdxs[ri];
+      rowOrder.get(rowIdx).sort(
+        (a, b) => bary(a, (id) => childrenOf.get(id) ?? []) -
+                  bary(b, (id) => childrenOf.get(id) ?? [])
+      );
+      refreshTempX(rowIdx);
+    }
+  }
 
   // ─── Phase 7: Assign x/y positions ────────────────────────────────────────
   const horizontalGap = 40;
@@ -199,27 +259,26 @@ export const layoutGraph = (nodes, edges, hideDebugNodes = true) => {
   const layoutedNodes = [];
   let currentY = 0;
 
-  Array.from(rows.keys())
-    .sort((a, b) => a - b)
-    .forEach((rowIdx) => {
-      const rowNodes = sortRowNodes(rows.get(rowIdx));
+  sortedRowIdxs.forEach((rowIdx) => {
+    const orderedIds = rowOrder.get(rowIdx);
+    const rowNodes = orderedIds.map((id) => nodeById.get(id));
 
-      // Split into sub-rows if > maxNodesPerRow
-      for (let i = 0; i < rowNodes.length; i += maxNodesPerRow) {
-        const chunk = rowNodes.slice(i, i + maxNodesPerRow);
-        const widths = chunk.map(getNodeLayoutWidth);
-        const totalWidth =
-          widths.reduce((s, w) => s + w, 0) + (chunk.length - 1) * horizontalGap;
-        let x = -totalWidth / 2;
+    // Split into sub-rows if row is very wide
+    for (let i = 0; i < rowNodes.length; i += maxNodesPerRow) {
+      const chunk = rowNodes.slice(i, i + maxNodesPerRow);
+      const widths = chunk.map(getNodeLayoutWidth);
+      const totalWidth =
+        widths.reduce((s, w) => s + w, 0) + (chunk.length - 1) * horizontalGap;
+      let x = -totalWidth / 2;
 
-        chunk.forEach((node, j) => {
-          layoutedNodes.push({ ...node, position: { x, y: currentY } });
-          x += widths[j] + horizontalGap;
-        });
+      chunk.forEach((node, j) => {
+        layoutedNodes.push({ ...node, position: { x, y: currentY } });
+        x += widths[j] + horizontalGap;
+      });
 
-        currentY += verticalGap;
-      }
-    });
+      currentY += verticalGap;
+    }
+  });
 
   // ─── Deduplicate and style edges ──────────────────────────────────────────
   const seenEdgeIds = new Set();
